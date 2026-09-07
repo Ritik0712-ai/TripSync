@@ -47,3 +47,4 @@ next-env.d.ts
 
 # local convenience script, not part of the project
 push.command
+dev.command
