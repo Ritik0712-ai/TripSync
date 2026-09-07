@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { 
   Plus, MapPin, Calendar, DollarSign, Users, 
   Plane, Mountain, Palmtree, Utensils, Camera,
-  MoreHorizontal, Trash2, ExternalLink, Clock
+  Trash2, Clock
 } from 'lucide-react'
 
 interface Trip {
