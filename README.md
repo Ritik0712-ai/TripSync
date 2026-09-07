@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TripSync
 
-## Getting Started
+An AI trip planner that respects real-world constraints.
 
-First, run the development server:
+Most AI itinerary generators hand you a plausible-looking list of places. TripSync
+generates a plan that actually holds up: stops are placed at times the venue is
+open, meals land at meal times, travel time between stops is accounted for so you
+never teleport across a city, and the whole plan stays inside your budget.
+
+Tell it where, when, who with, what you like and how much you want to spend, and
+it returns a day-by-day schedule you can share with the people you're travelling
+with.
+
+## Stack
+
+| Layer      | Choice                                              |
+| ---------- | --------------------------------------------------- |
+| Framework  | Next.js 16 (App Router, React 19)                   |
+| Database   | Neon Postgres                                        |
+| ORM        | Drizzle                                              |
+| Auth       | Neon Managed Better Auth (email + Google)           |
+| AI         | Groq (primary), Google Gemini (fallback)            |
+| Places     | Photon API for destination autocomplete             |
+| UI         | Tailwind CSS 4 + shadcn/ui                          |
+
+## Getting started
 
 ```bash
+npm install
+cp .env.example .env.local   # then fill in the values below
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+DATABASE_URL=            # Neon pooled connection string
+DATABASE_URL_UNPOOLED=   # Neon direct connection, for migrations
+NEON_AUTH_BASE_URL=      # Neon Console -> Branch -> Auth -> Configuration
+NEON_AUTH_COOKIE_SECRET= # openssl rand -base64 32
+GROQ_API_KEY=
+GEMINI_API_KEY=
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Database
 
-## Learn More
+The Drizzle schema in `src/lib/db/schema.ts` is the source of truth.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run db:push      # apply the schema to Neon
+npm run db:studio    # browse the data
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## How it's put together
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/
+│   ├── (auth)/            sign in / sign up
+│   ├── (dashboard)/       trip list, creation wizard, trip detail
+│   ├── api/
+│   │   ├── auth/          Neon Auth proxy
+│   │   ├── trips/         trip CRUD, sharing, members
+│   │   └── generate-itinerary/
+│   └── join/              accept a share link
+├── components/            UI, share dialog, member list
+├── lib/
+│   ├── auth/              server + client auth
+│   └── db/                schema, access control, serialization
+└── proxy.ts               session refresh (Next 16's middleware)
+```
 
-## Deploy on Vercel
+### A note on permissions
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+There is no row-level security. Every query goes through this app's own API
+routes, and who-can-see-what is decided in one place — `src/lib/db/access.ts`.
+An earlier version enforced this with Postgres RLS policies that referenced each
+other in a cycle, which made every read fail with `infinite recursion detected in
+policy`. One function is easier to reason about and can't get into that state.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [MIGRATION.md](./MIGRATION.md) for the full history of the move off Supabase.
+
+## Status
+
+Working: auth, the trip creation wizard, AI itinerary generation, saving and
+viewing trips, share links, and collaborator management.
+
+Not built yet: the map view, geocoding, drag-to-reorder editing, and the
+offline PWA — see the PRD for the full roadmap.
