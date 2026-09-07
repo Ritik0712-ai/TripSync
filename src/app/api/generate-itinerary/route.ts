@@ -314,20 +314,57 @@ async function generateWithGemini(prompt: string): Promise<GeneratedItinerary | 
   }
 }
 
+type Provider = {
+  name: string
+  run: (prompt: string) => Promise<GeneratedItinerary | null>
+}
+
+const PROVIDER_REGISTRY: Record<string, Provider> = {
+  groq: { name: `groq (${GROQ_MODEL})`, run: generateWithGroq },
+  gemini: { name: `gemini (${GEMINI_MODEL})`, run: generateWithGemini },
+  anthropic: { name: `anthropic (${ANTHROPIC_MODEL})`, run: generateWithClaude },
+}
+
 /**
- * Providers in preference order. Claude writes the best itineraries but is the
- * only paid one; Groq and Gemini are free and exist so a bad key, an outage or
- * an exhausted quota degrades quality instead of breaking the feature.
+ * Which providers to try, in order.
  *
- * All three are kept working on purpose. A fallback that is never exercised
- * rots — which is exactly how the previous two models ended up decommissioned
- * without anyone noticing.
+ * The default is the free tier only. Anthropic writes the best itineraries but
+ * its API is billed per call with no free allowance, and this project's whole
+ * premise is that it costs nothing to run. Its implementation is kept and
+ * maintained — enabling it is a matter of putting `anthropic` at the front of
+ * AI_PROVIDER_ORDER once the account has credit.
+ *
+ * Order is configuration rather than code so a provider outage, a price change
+ * or a funded account is an env edit and a restart, not a deploy.
+ *
+ * Listing a provider that always fails is not free: each attempt costs a full
+ * HTTP round trip before falling through, so a permanently broken primary adds
+ * latency to every generation. Keep the list to providers that can actually
+ * serve.
  */
-const PROVIDERS: { name: string; run: (p: string) => Promise<GeneratedItinerary | null> }[] = [
-  { name: `anthropic (${ANTHROPIC_MODEL})`, run: generateWithClaude },
-  { name: `groq (${GROQ_MODEL})`, run: generateWithGroq },
-  { name: `gemini (${GEMINI_MODEL})`, run: generateWithGemini },
-]
+const PROVIDER_ORDER = (process.env.AI_PROVIDER_ORDER ?? 'groq,gemini')
+  .split(',')
+  .map((name) => name.trim().toLowerCase())
+  .filter(Boolean)
+
+const PROVIDERS: Provider[] = PROVIDER_ORDER.flatMap((name) => {
+  const provider = PROVIDER_REGISTRY[name]
+  if (!provider) {
+    console.warn(
+      `Unknown AI provider "${name}" in AI_PROVIDER_ORDER — ignoring. ` +
+        `Valid names: ${Object.keys(PROVIDER_REGISTRY).join(', ')}`
+    )
+    return []
+  }
+  return [provider]
+})
+
+if (PROVIDERS.length === 0) {
+  console.error(
+    'AI_PROVIDER_ORDER resolved to no usable providers; itinerary generation ' +
+      'will fail on every request.'
+  )
+}
 
 export async function POST(request: NextRequest) {
   try {

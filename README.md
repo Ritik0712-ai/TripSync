@@ -19,7 +19,7 @@ with.
 | Database   | Neon Postgres                                        |
 | ORM        | Drizzle                                              |
 | Auth       | Neon Managed Better Auth (email + Google)           |
-| AI         | Claude (primary), Groq + Gemini (free fallbacks)     |
+| AI         | Groq (primary), Gemini (fallback) — both free tier   |
 | Places     | Photon API for destination autocomplete             |
 | UI         | Tailwind CSS 4 + shadcn/ui                          |
 
@@ -38,9 +38,12 @@ DATABASE_URL=            # Neon pooled connection string
 DATABASE_URL_UNPOOLED=   # Neon direct connection, for migrations
 NEON_AUTH_BASE_URL=      # Neon Console -> Branch -> Auth -> Configuration
 NEON_AUTH_COOKIE_SECRET= # openssl rand -base64 32
-ANTHROPIC_API_KEY=      # primary (paid)
-GROQ_API_KEY=           # fallback (free)
-GEMINI_API_KEY=         # fallback (free)
+GROQ_API_KEY=           # primary
+GEMINI_API_KEY=         # fallback
+
+# Optional. Anthropic is supported but billed per call, so it is off by
+# default. To use it: fund the account, set ANTHROPIC_API_KEY, and set
+# AI_PROVIDER_ORDER=anthropic,groq,gemini
 ```
 
 ### Database
