@@ -1,0 +1,327 @@
+
+<style>
+  :root { --gap: 20px; }
+  .section { margin: 0 0 2.5rem; }
+  .section-label { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-tertiary); margin: 0 0 12px; }
+  .card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; }
+  .card-accent-red { border-left: 3px solid #E24B4A; border-radius: 0 var(--border-radius-lg) var(--border-radius-lg) 0; }
+  .card-accent-teal { border-left: 3px solid #1D9E75; border-radius: 0 var(--border-radius-lg) var(--border-radius-lg) 0; }
+  .card-accent-amber { border-left: 3px solid #BA7517; border-radius: 0 var(--border-radius-lg) var(--border-radius-lg) 0; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 20px; margin-bottom: 6px; }
+  .tag-red { background: #FCEBEB; color: #A32D2D; }
+  .tag-teal { background: #E1F5EE; color: #0F6E56; }
+  .tag-amber { background: #FAEEDA; color: #854F0B; }
+  .tag-blue { background: #E6F1FB; color: #185FA5; }
+  .tag-purple { background: #EEEDFE; color: #534AB7; }
+  h3 { font-size: 15px; font-weight: 500; margin: 0 0 4px; color: var(--color-text-primary); }
+  p { font-size: 13px; color: var(--color-text-secondary); margin: 0; line-height: 1.6; }
+  .pain-num { font-size: 28px; font-weight: 500; color: #E24B4A; margin: 0 0 2px; }
+  .sol-num { font-size: 28px; font-weight: 500; color: #1D9E75; margin: 0 0 2px; }
+  .hero-title { font-size: 22px; font-weight: 500; margin: 0 0 8px; color: var(--color-text-primary); }
+  .hero-sub { font-size: 14px; color: var(--color-text-secondary); margin: 0 0 28px; line-height: 1.6; }
+  .journey-step { display: flex; gap: 14px; align-items: flex-start; padding: 10px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .journey-step:last-child { border-bottom: none; }
+  .step-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 15px; }
+  .step-bad { background: #FCEBEB; }
+  .step-good { background: #E1F5EE; }
+  .step-label { font-size: 12px; font-weight: 500; margin: 0 0 2px; }
+  .step-desc { font-size: 12px; color: var(--color-text-secondary); margin: 0; line-height: 1.5; }
+  .arrow-down { text-align: center; color: var(--color-text-tertiary); font-size: 18px; margin: 4px 0; }
+  .vs-divider { display: flex; align-items: center; gap: 10px; margin: 20px 0 16px; }
+  .vs-divider::before, .vs-divider::after { content: ''; flex: 1; height: 0.5px; background: var(--color-border-tertiary); }
+  .vs-label { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); letter-spacing: 0.1em; }
+  .phase-row { display: flex; gap: 10px; align-items: stretch; margin-bottom: 10px; }
+  .phase-dot { width: 8px; border-radius: 4px; flex-shrink: 0; }
+  .phase-body { flex: 1; }
+  .phase-title { font-size: 13px; font-weight: 500; margin: 0 0 2px; color: var(--color-text-primary); }
+  .phase-desc { font-size: 12px; color: var(--color-text-secondary); margin: 0; }
+  .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat-box { flex: 1; min-width: 100px; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; }
+  .stat-val { font-size: 20px; font-weight: 500; color: var(--color-text-primary); margin: 0 0 2px; }
+  .stat-lbl { font-size: 11px; color: var(--color-text-tertiary); margin: 0; }
+  .clickable { cursor: pointer; transition: opacity 0.15s; }
+  .clickable:hover { opacity: 0.8; }
+</style>
+
+<h2 class="hero-title" style="padding-top: 1rem;">TripSync — the full picture</h2>
+<p class="hero-sub">What's broken in travel planning today, why nothing has fixed it, and exactly how TripSync solves it end-to-end.</p>
+
+<div class="section">
+  <p class="section-label">The market moment</p>
+  <div class="stat-row">
+    <div class="stat-box">
+      <p class="stat-val">500M+</p>
+      <p class="stat-lbl">new travelers entering tourism this decade</p>
+    </div>
+    <div class="stat-box">
+      <p class="stat-val">10+</p>
+      <p class="stat-lbl">apps used to plan a single trip today</p>
+    </div>
+    <div class="stat-box">
+      <p class="stat-val">₹0</p>
+      <p class="stat-lbl">cost to run TripSync until you monetize</p>
+    </div>
+    <div class="stat-box">
+      <p class="stat-val">0</p>
+      <p class="stat-lbl">tools that do constraint-aware AI planning</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="section-label">The 5 real problems tourists face</p>
+  <div class="grid-2">
+    <div class="card card-accent-red">
+      <span class="tag tag-red">Problem 1</span>
+      <h3>Everything is fragmented</h3>
+      <p>Flights on MakeMyTrip. Hotels on OYO. Activities on YouTube. Budget in WhatsApp. Itinerary in Notes. There is no single place where a trip lives. Tourists manually stitch 10 tools together and it always breaks.</p>
+    </div>
+    <div class="card card-accent-red">
+      <span class="tag tag-red">Problem 2</span>
+      <h3>AI gives ideas, not plans</h3>
+      <p>Every AI chatbot will happily list "Top 10 places in Goa" — but none of them know that Dudhsagar Falls closes at 4pm, takes 2 hours to reach, and you also want lunch. They give you a list. You still build the plan.</p>
+    </div>
+    <div class="card card-accent-red">
+      <span class="tag tag-red">Problem 3</span>
+      <h3>Group planning is chaos</h3>
+      <p>6 friends planning a trip = 6 different opinion threads in WhatsApp, one overworked coordinator, conflicting budgets, and someone always left out. There's no shared workspace for travel decisions.</p>
+    </div>
+    <div class="card card-accent-red">
+      <span class="tag tag-red">Problem 4</span>
+      <h3>Plans die mid-trip</h3>
+      <p>Internet cuts out in Spiti Valley. The hotel PDF won't open. The itinerary is in 3 screenshots. Mid-trip, travelers have zero digital support — the tool they used to plan becomes useless on the ground.</p>
+    </div>
+    <div class="card card-accent-red">
+      <span class="tag tag-red">Problem 5</span>
+      <h3>First-timers have no guide</h3>
+      <p>A 21-year-old from Agra planning their first solo trip has no travel-savvy friend to call. Reddit is noise. YouTube is ads. They're making ₹20,000 decisions with zero structured guidance.</p>
+    </div>
+    <div class="card" style="background: var(--color-background-secondary); display: flex; align-items: center; justify-content: center; min-height: 120px;">
+      <p style="text-align: center; font-size: 13px; color: var(--color-text-secondary);">All 5 of these hit the same traveler<br>on the same trip. Every time.</p>
+    </div>
+  </div>
+</div>
+
+<div class="vs-divider"><span class="vs-label">how tripsync solves each one</span></div>
+
+<div class="section">
+  <p class="section-label">The solution, mapped to each problem</p>
+  <div class="grid-2">
+    <div class="card card-accent-teal">
+      <span class="tag tag-teal">Solves Problem 1</span>
+      <h3>One unified trip workspace</h3>
+      <p>Every element of a trip — flights, hotels, activities, routes, budget — lives in a single timeline. One link contains the entire trip. No more stitching. No more screenshots.</p>
+    </div>
+    <div class="card card-accent-teal">
+      <span class="tag tag-teal">Solves Problem 2</span>
+      <h3>Constraint-aware AI engine</h3>
+      <p>TripSync's AI doesn't just suggest places. It builds a time-validated, route-optimized day plan. It knows opening hours. It accounts for travel time between stops. It fits meals into the right slots. It gives you a plan that actually works.</p>
+    </div>
+    <div class="card card-accent-teal">
+      <span class="tag tag-teal">Solves Problem 3</span>
+      <h3>Real-time collaborative planning</h3>
+      <p>Invite the group. Everyone sees the same live itinerary. Vote on stops. Comment on options. Budget split auto-calculated per person. Like Notion + Figma, but for trips.</p>
+    </div>
+    <div class="card card-accent-teal">
+      <span class="tag tag-teal">Solves Problem 4</span>
+      <h3>Offline-first PWA + trip mode</h3>
+      <p>Install TripSync on your phone before you leave. Full itinerary, maps, and stop details cached locally. Works with zero internet. Navigate, check-in, journal — all offline.</p>
+    </div>
+    <div class="card card-accent-teal">
+      <span class="tag tag-teal">Solves Problem 5</span>
+      <h3>An AI travel companion, not a list</h3>
+      <p>The AI assistant knows your itinerary. Ask it anything mid-plan. "What's the best time to visit this waterfall?" "We're vegetarian — flag all non-veg stops." "I have 2 extra hours — what's nearby?" It answers in context, not in generic search results.</p>
+    </div>
+    <div class="card card-accent-teal" style="display: flex; flex-direction: column; justify-content: center;">
+      <span class="tag tag-teal">Bonus</span>
+      <h3>Community + SEO moat</h3>
+      <p>Public itineraries become discoverable pages. "3 days in Goa under ₹10,000" ranks on Google. Others clone it in one click. The product grows itself.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="section-label">What a user's journey looks like — before vs after</p>
+  <div class="grid-2">
+    <div class="card">
+      <p style="font-size: 12px; font-weight: 500; color: #A32D2D; margin: 0 0 12px;">Without TripSync</p>
+      <div class="journey-step">
+        <div class="step-icon step-bad">😤</div>
+        <div>
+          <p class="step-label">Search phase</p>
+          <p class="step-desc">3 hours on YouTube, Reddit, travel blogs. Conflicting opinions. Outdated info. Overwhelm.</p>
+        </div>
+      </div>
+      <div class="journey-step">
+        <div class="step-icon step-bad">📋</div>
+        <div>
+          <p class="step-label">Planning phase</p>
+          <p class="step-desc">Copy-paste into Notes app. Manually calculate distances. Realize Day 2 is impossible to execute. Redo it.</p>
+        </div>
+      </div>
+      <div class="journey-step">
+        <div class="step-icon step-bad">📱</div>
+        <div>
+          <p class="step-label">Group coordination</p>
+          <p class="step-desc">47 WhatsApp messages. 3 people want different things. Someone drops out. Plan rebuilt from scratch.</p>
+        </div>
+      </div>
+      <div class="journey-step">
+        <div class="step-icon step-bad">😰</div>
+        <div>
+          <p class="step-label">Mid-trip</p>
+          <p class="step-desc">No internet. Can't open Google Maps. Screenshots don't load. Completely lost on Day 3.</p>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size: 12px; font-weight: 500; color: #0F6E56; margin: 0 0 12px;">With TripSync</p>
+      <div class="journey-step">
+        <div class="step-icon step-good">✨</div>
+        <div>
+          <p class="step-label">Trip creation — 2 minutes</p>
+          <p class="step-desc">Enter destination, dates, budget, vibe. AI generates a full, time-validated day plan instantly.</p>
+        </div>
+      </div>
+      <div class="journey-step">
+        <div class="step-icon step-good">🗺️</div>
+        <div>
+          <p class="step-label">Refinement — on the map</p>
+          <p class="step-desc">See everything on an interactive map. Drag to reorder. Add stops. AI validates timing automatically.</p>
+        </div>
+      </div>
+      <div class="journey-step">
+        <div class="step-icon step-good">👥</div>
+        <div>
+          <p class="step-label">Group sync — real-time</p>
+          <p class="step-desc">Share link. Friends vote on stops. Budget split shown per person. Everyone aligned in one workspace.</p>
+        </div>
+      </div>
+      <div class="journey-step">
+        <div class="step-icon step-good">📴</div>
+        <div>
+          <p class="step-label">Mid-trip — fully offline</p>
+          <p class="step-desc">App installed on phone. Full itinerary cached. Navigate, check-in, journal — zero internet needed.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="section-label">Why competitors haven't solved this</p>
+  <div class="grid-3">
+    <div class="card">
+      <span class="tag tag-amber">Wanderlog</span>
+      <h3>Good organizer</h3>
+      <p>Organizes your plan well. But no real AI constraint logic. Doesn't know if Day 2 is physically possible.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-amber">Layla AI</span>
+      <h3>Chat-first</h3>
+      <p>Great at suggestions in chat. But no structured itinerary, no booking, no offline, no collaboration.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-amber">TripIt</span>
+      <h3>Email importer</h3>
+      <p>Auto-builds from confirmation emails. Enterprise-focused. No AI planning, no emerging market angle.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-amber">Google Trips</span>
+      <h3>Discontinued</h3>
+      <p>Google killed it. The gap it left is exactly what TripSync fills — and TripSync does it better.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-amber">ChatGPT</span>
+      <h3>Idea generator</h3>
+      <p>Lists places. Doesn't know opening hours, travel time, or your budget. Hands you a list and walks away.</p>
+    </div>
+    <div class="card" style="background: var(--color-background-secondary); display: flex; align-items: center; justify-content: center;">
+      <p style="text-align: center; font-size: 13px; color: var(--color-text-secondary);">None of them are<br>constraint-aware + offline-first<br>+ built for emerging markets</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="section-label">The 5 phases — what gets built when</p>
+  <div class="card">
+    <div class="phase-row">
+      <div class="phase-dot" style="background: #1D9E75;"></div>
+      <div class="phase-body">
+        <p class="phase-title">Phase 1 — Core loop <span style="font-weight:400;color:var(--color-text-tertiary);font-size:12px;">3–4 weeks</span></p>
+        <p class="phase-desc">Sign up → fill trip form → AI generates itinerary → save it. The full proof of concept. Already demoable to anyone.</p>
+      </div>
+    </div>
+    <div class="phase-row">
+      <div class="phase-dot" style="background: #185FA5;"></div>
+      <div class="phase-body">
+        <p class="phase-title">Phase 2 — Visual + editable <span style="font-weight:400;color:var(--color-text-tertiary);font-size:12px;">3–4 weeks</span></p>
+        <p class="phase-desc">Interactive Google Maps view. Drag-reorder stops. Edit anything. Share itinerary via public link. Now it feels like a real product.</p>
+      </div>
+    </div>
+    <div class="phase-row">
+      <div class="phase-dot" style="background: #7F77DD;"></div>
+      <div class="phase-body">
+        <p class="phase-title">Phase 3 — Group + budget <span style="font-weight:400;color:var(--color-text-tertiary);font-size:12px;">3–4 weeks</span></p>
+        <p class="phase-desc">Invite friends. Real-time sync. Vote on stops. Budget split per person. Now it's sticky — groups bring more groups.</p>
+      </div>
+    </div>
+    <div class="phase-row">
+      <div class="phase-dot" style="background: #BA7517;"></div>
+      <div class="phase-body">
+        <p class="phase-title">Phase 4 — Travel companion <span style="font-weight:400;color:var(--color-text-tertiary);font-size:12px;">3–4 weeks</span></p>
+        <p class="phase-desc">PWA install. Full offline mode. Trip mode with next-stop navigation. Weather alerts. Auto-journal. Now it lives on users' phones.</p>
+      </div>
+    </div>
+    <div class="phase-row" style="margin-bottom: 0;">
+      <div class="phase-dot" style="background: #D85A30;"></div>
+      <div class="phase-body">
+        <p class="phase-title">Phase 5 — Monetization <span style="font-weight:400;color:var(--color-text-tertiary);font-size:12px;">4–5 weeks</span></p>
+        <p class="phase-desc">Razorpay Pro plan (₹149/mo). Affiliate booking links. 1000+ SEO itinerary pages auto-generated. Referral loop. Now it makes money.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p class="section-label">The tech — ₹0 to run until scale</p>
+  <div class="grid-3">
+    <div class="card">
+      <span class="tag tag-blue">AI engine</span>
+      <h3>Gemini Flash</h3>
+      <p>1,500 free itinerary generations per day. Groq as fallback. Zero cost until thousands of daily users.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-blue">Maps</span>
+      <h3>Google Maps API</h3>
+      <p>$200/month free credit. Covers ~28k map loads. More than enough to build, test, and validate the entire product.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-blue">Backend + DB</span>
+      <h3>Supabase</h3>
+      <p>PostgreSQL + Auth + Realtime + Storage. 500MB free DB, 50k MAU auth. One platform for everything.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-purple">Frontend</span>
+      <h3>Next.js 14</h3>
+      <p>App router, API routes, SSG for SEO pages. Deployed on Vercel Hobby — free forever for students.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-purple">Payments</span>
+      <h3>Razorpay</h3>
+      <p>Free to integrate. 2% per transaction only when you earn. Zero upfront cost. India-first, UPI supported.</p>
+    </div>
+    <div class="card">
+      <span class="tag tag-purple">Offline</span>
+      <h3>PWA + Workbox</h3>
+      <p>Service workers for full offline caching. next-pwa library. Installable on Android and iOS. Free forever.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="background: var(--color-background-secondary); text-align: center; padding: 1.5rem;">
+  <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0 0 6px;">The single most important thing to understand about TripSync</p>
+  <p style="font-size: 16px; font-weight: 500; color: var(--color-text-primary); margin: 0;">It's not a travel app. It's the operating system for a trip —<br>the layer that makes every other travel tool unnecessary.</p>
+</div>
