@@ -44,3 +44,6 @@ next-env.d.ts
 # migration leftovers — dead Supabase code kept locally for reference only
 /_legacy_supabase/
 *.bak
+
+# local convenience script, not part of the project
+push.command
