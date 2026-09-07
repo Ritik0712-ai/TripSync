@@ -14,8 +14,23 @@ import {
  * the caller sees a confusing parse error instead of a 401. Every API route
  * does its own auth check via getCurrentUserId(), so skipping them here is
  * safe: it changes the failure mode from a redirect to a proper 401.
+ *
+ * Note on '/': the library matches a skip entry as "this exact path or a
+ * subpath of it", but special-cases '/' to exact-match only. Listing it
+ * un-protects the landing page without un-protecting the whole site.
  */
-const SKIP_ROUTES = [...DEFAULT_AUTH_SKIP_ROUTES, '/api/']
+const SKIP_ROUTES = [
+  ...DEFAULT_AUTH_SKIP_ROUTES,
+  '/api/',
+  // The library's defaults assume auth pages at /auth/sign-in and
+  // /auth/sign-up. This app puts them at /login and /signup, so without these
+  // entries the proxy redirects the sign-up page to the login page and a new
+  // user can never create an account.
+  '/',
+  '/login',
+  '/signup',
+  '/join',
+]
 
 export default async function proxy(request: NextRequest) {
   const result = await processAuthMiddleware({
