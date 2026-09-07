@@ -19,7 +19,7 @@ with.
 | Database   | Neon Postgres                                        |
 | ORM        | Drizzle                                              |
 | Auth       | Neon Managed Better Auth (email + Google)           |
-| AI         | Groq (primary), Google Gemini (fallback)            |
+| AI         | Claude (primary), Groq + Gemini (free fallbacks)     |
 | Places     | Photon API for destination autocomplete             |
 | UI         | Tailwind CSS 4 + shadcn/ui                          |
 
@@ -38,8 +38,9 @@ DATABASE_URL=            # Neon pooled connection string
 DATABASE_URL_UNPOOLED=   # Neon direct connection, for migrations
 NEON_AUTH_BASE_URL=      # Neon Console -> Branch -> Auth -> Configuration
 NEON_AUTH_COOKIE_SECRET= # openssl rand -base64 32
-GROQ_API_KEY=
-GEMINI_API_KEY=
+ANTHROPIC_API_KEY=      # primary (paid)
+GROQ_API_KEY=           # fallback (free)
+GEMINI_API_KEY=         # fallback (free)
 ```
 
 ### Database
