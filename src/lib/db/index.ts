@@ -3,6 +3,7 @@ import { Pool, neonConfig } from '@neondatabase/serverless'
 import ws from 'ws'
 
 import * as schema from './schema'
+import { env } from '@/lib/env'
 
 // The WebSocket driver (rather than the HTTP one) is used deliberately: it is
 // the only Neon driver that supports real interactive transactions, which we
@@ -16,7 +17,7 @@ const globalForDb = globalThis as unknown as { pool?: Pool }
 
 // Reuse the pool across hot reloads in dev so we don't leak connections.
 const pool =
-  globalForDb.pool ?? new Pool({ connectionString: process.env.DATABASE_URL! })
+  globalForDb.pool ?? new Pool({ connectionString: env.DATABASE_URL })
 
 if (process.env.NODE_ENV !== 'production') globalForDb.pool = pool
 

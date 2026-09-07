@@ -4,6 +4,8 @@ import {
   DEFAULT_AUTH_SKIP_ROUTES,
 } from '@neondatabase/auth/server'
 
+import { env } from '@/lib/env'
+
 /**
  * Route protection. This is `proxy.ts`, not `middleware.ts` — Next.js 16
  * renamed the convention. Do not recreate middleware.ts.
@@ -38,8 +40,8 @@ export default async function proxy(request: NextRequest) {
     pathname: request.nextUrl.pathname,
     skipRoutes: SKIP_ROUTES,
     loginUrl: '/login',
-    baseUrl: process.env.NEON_AUTH_BASE_URL!,
-    cookieSecret: process.env.NEON_AUTH_COOKIE_SECRET!,
+    baseUrl: env.NEON_AUTH_BASE_URL,
+    cookieSecret: env.NEON_AUTH_COOKIE_SECRET,
   })
 
   switch (result.action) {
