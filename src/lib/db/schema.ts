@@ -55,6 +55,14 @@ export const trips = pgTable(
     shareToken: text('share_token')
       .notNull()
       .default(sql`gen_random_uuid()::text`),
+    /**
+     * What the share link grants to whoever opens it. Defaults to 'viewer'
+     * because a link can be forwarded past the people it was sent to, so the
+     * safe assumption is that the holder should be able to read and nothing
+     * more. The owner can raise it to 'editor' per trip, and can always
+     * promote an individual afterwards.
+     */
+    shareRole: text('share_role').default('viewer').notNull(),
     status: text('status').default('planning').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -62,6 +70,7 @@ export const trips = pgTable(
     uniqueIndex('trips_share_token_key').on(t.shareToken),
     index('trips_owner_id_idx').on(t.ownerId),
     check('trips_status_check', sql`${t.status} in ('planning','active','completed')`),
+    check('trips_share_role_check', sql`${t.shareRole} in ('viewer','editor')`),
   ]
 )
 

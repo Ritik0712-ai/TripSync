@@ -64,6 +64,8 @@ export interface Trip {
   group_size: number
   is_public: boolean
   share_token: string
+  /** What the share link grants to whoever opens it. */
+  share_role: TripRole
   status: 'planning' | 'active' | 'completed'
   created_at: string
   trip_days: TripDay[]

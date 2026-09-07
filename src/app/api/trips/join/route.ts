@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     const trip = await db.query.trips.findFirst({
       where: eq(trips.shareToken, token),
-      columns: { id: true, ownerId: true, title: true },
+      columns: { id: true, ownerId: true, title: true, shareRole: true },
     })
 
     if (!trip) {
@@ -103,9 +103,12 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // The link grants whatever the owner set for this trip — 'viewer' unless
+    // they deliberately opened it up. Previously this was hardcoded to
+    // 'editor', so anyone the link reached could rewrite the itinerary.
     const [member] = await db
       .insert(tripMembers)
-      .values({ tripId: trip.id, userId, role: 'editor' })
+      .values({ tripId: trip.id, userId, role: trip.shareRole })
       .returning()
 
     return NextResponse.json(

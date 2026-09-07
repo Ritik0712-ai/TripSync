@@ -30,6 +30,10 @@ export function TripShareDialog({ trip, currentUserId, isOwner, onMembersUpdate 
   const [email, setEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor')
   const [loading, setLoading] = useState(false)
+  const [shareRole, setShareRole] = useState<'viewer' | 'editor'>(
+    trip.share_role === 'editor' ? 'editor' : 'viewer'
+  )
+  const [savingRole, setSavingRole] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -45,6 +49,33 @@ export function TripShareDialog({ trip, currentUserId, isOwner, onMembersUpdate 
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       console.error('Failed to copy:', err)
+    }
+  }
+
+  /**
+   * What the link grants. Owner-only, and saved immediately so the setting
+   * cannot be left half-applied while the link is already being shared.
+   */
+  const updateShareRole = async (role: 'viewer' | 'editor') => {
+    const previous = shareRole
+    setShareRole(role)
+    setSavingRole(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/trips/${trip.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ shareRole: role }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not update the link')
+      onMembersUpdate?.()
+    } catch (err) {
+      setShareRole(previous)
+      setError(err instanceof Error ? err.message : 'Could not update the link')
+    } finally {
+      setSavingRole(false)
     }
   }
 
@@ -136,10 +167,56 @@ export function TripShareDialog({ trip, currentUserId, isOwner, onMembersUpdate 
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Anyone with this link can view and join this trip as an editor.
-              </p>
             </div>
+
+            {isOwner ? (
+              <div className="space-y-2">
+                <Label>People with this link can</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={savingRole}
+                    onClick={() => updateShareRole('viewer')}
+                    className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                      shareRole === 'viewer'
+                        ? 'border-blue-600 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="block font-medium">View only</span>
+                    <span className="block text-xs text-muted-foreground">
+                      They can read the itinerary but not change it
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={savingRole}
+                    onClick={() => updateShareRole('editor')}
+                    className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                      shareRole === 'editor'
+                        ? 'border-blue-600 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="block font-medium">Edit</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Anyone with the link can change the plan
+                    </span>
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {shareRole === 'viewer'
+                    ? 'Safest default. You can promote individual people to editor once they join.'
+                    : 'A link can be forwarded — everyone who receives it will be able to edit.'}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Anyone with this link can join this trip as a{' '}
+                {trip.share_role === 'editor' ? 'n editor' : ' viewer'}.
+              </p>
+            )}
           </TabsContent>
 
           {isOwner && (

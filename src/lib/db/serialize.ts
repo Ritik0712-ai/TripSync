@@ -76,6 +76,7 @@ export function serializeTrip(
     group_size: t.groupSize,
     is_public: t.isPublic,
     share_token: t.shareToken,
+    share_role: t.shareRole,
     status: t.status,
     created_at: t.createdAt,
     trip_days: (t.days ?? [])

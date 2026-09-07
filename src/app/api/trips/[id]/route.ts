@@ -93,6 +93,22 @@ export async function PATCH(
     if (body.groupSize !== undefined) updates.groupSize = Number(body.groupSize) || 1
     if (body.status !== undefined) updates.status = body.status
     if (body.isPublic !== undefined) updates.isPublic = Boolean(body.isPublic)
+    if (body.shareRole !== undefined) {
+      if (!['viewer', 'editor'].includes(body.shareRole)) {
+        return NextResponse.json(
+          { error: 'shareRole must be viewer or editor' },
+          { status: 400 }
+        )
+      }
+      updates.shareRole = body.shareRole
+    }
+
+    if (updates.shareRole !== undefined && !access.isOwner) {
+      return NextResponse.json(
+        { error: 'Only the trip owner can change what the share link grants' },
+        { status: 403 }
+      )
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
