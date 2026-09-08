@@ -48,3 +48,6 @@ next-env.d.ts
 # local convenience script, not part of the project
 push.command
 dev.command
+
+# Google OAuth credentials
+client_secret_*.json
