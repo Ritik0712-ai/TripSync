@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 
 import { db } from '@/lib/db'
@@ -87,26 +87,34 @@ export async function PATCH(
     if (placeChanged || addressChanged) {
       const name = (updates.placeName as string | undefined) ?? stop.placeName
       const addr = updates.address as string | undefined
-
-      if (placeChanged) {
-        // Clear stale coordinates before fetching new ones.
-        db.update(stops)
-          .set({ lat: null, lng: null })
-          .where(eq(stops.id, stopId))
-          .catch((err) => console.error('[geocode] clear coords failed:', err))
-      }
-
       const query = buildGeocodeQuery(name, addr)
-      if (query) {
-        geocodeByQuery(query).then((outcome) => {
-          if (outcome.lat !== null) {
-            db.update(stops)
-              .set({ lat: outcome.lat, lng: outcome.lng })
+
+      // Same reasoning as the create route: a floating promise is killed when
+      // the serverless invocation freezes, so this has to run inside after().
+      // Clearing the stale coordinates lives in here too — doing it eagerly
+      // and then losing the refetch would leave the stop permanently unmapped.
+      after(async () => {
+        try {
+          if (placeChanged) {
+            await db
+              .update(stops)
+              .set({ lat: null, lng: null })
               .where(eq(stops.id, stopId))
-              .catch((err) => console.error('[geocode] db update failed:', err))
           }
-        })
-      }
+
+          if (!query) return
+
+          const outcome = await geocodeByQuery(query)
+          if (outcome.lat === null) return
+
+          await db
+            .update(stops)
+            .set({ lat: outcome.lat, lng: outcome.lng })
+            .where(eq(stops.id, stopId))
+        } catch (err) {
+          console.error('[geocode] background re-geocode failed:', err)
+        }
+      })
     }
 
     return response

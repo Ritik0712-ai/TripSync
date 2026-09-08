@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { and, eq, max } from 'drizzle-orm'
 
 import { db } from '@/lib/db'
@@ -83,20 +83,28 @@ export async function POST(
     const serialized = serializeStop(stop)
     const response = NextResponse.json({ stop: serialized }, { status: 201 })
 
-    // Non-blocking geocode. The response is already sent — geocoding runs after.
-    // If it fails the stop still exists with lat/lng = null and the UI degrades
-    // gracefully via mapsUrlForStop's text-query fallback.
-    const query = buildGeocodeQuery(
-      stop.placeName,
-      stop.address ?? undefined
-    )
+    // Geocode after the response, via `after()`.
+    //
+    // A bare floating promise does NOT work here: on serverless the function
+    // is frozen the moment the response is returned, so the lookup never
+    // finishes and every stop keeps lat/lng = null — the map silently stays
+    // empty in production while working fine on localhost. `after()` tells the
+    // platform to keep the invocation alive until this settles.
+    //
+    // If it fails the stop still exists with null coordinates and the UI
+    // degrades gracefully via mapsUrlForStop's text-query fallback.
+    const query = buildGeocodeQuery(stop.placeName, stop.address ?? undefined)
     if (query) {
-      geocodeByQuery(query).then((outcome) => {
-        if (outcome.lat !== null) {
-          db.update(stops)
+      after(async () => {
+        try {
+          const outcome = await geocodeByQuery(query)
+          if (outcome.lat === null) return
+          await db
+            .update(stops)
             .set({ lat: outcome.lat, lng: outcome.lng })
             .where(eq(stops.id, stop.id))
-            .catch((err) => console.error('[geocode] db update failed:', err))
+        } catch (err) {
+          console.error('[geocode] background geocode failed:', err)
         }
       })
     }

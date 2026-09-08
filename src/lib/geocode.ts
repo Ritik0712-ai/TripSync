@@ -20,7 +20,7 @@ const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org'
  * the operator before blocking rather than after.
  */
 const USER_AGENT =
-  'TripSync/1.0 (https://github.com/Ritik0712-ai/TripSync; contact@tripsync.app)'
+  'TripSync/1.0 (https://github.com/Ritik0712-ai/TripSync; ritikagarwal2468@gmail.com)'
 
 export interface GeocodeResult {
   lat: number
@@ -63,19 +63,23 @@ function failure(): GeocodeFailure {
 /**
  * Geocode a free-text query against Nominatim.
  *
- * Nominatim is slow (~200–400 ms per request) and enforces a 1 req/s rate
- * limit. Always call this with delayMs >= 1050. On 429 the function returns a
- * GeocodeFailure immediately rather than retrying — retrying a rate-limited IP
- * makes the situation worse.
+ * `delayMs` defaults to 0 — a single lookup should not pause first. It exists
+ * for LOOPS: a script geocoding many stops in sequence passes delayMs >= 1050
+ * to stay inside the 1 req/s policy. A delay here never rate-limits concurrent
+ * requests from different callers (they would all sleep and then fire at the
+ * same instant), so it is a pacing knob for serial work, nothing more.
+ *
+ * On 429 the function gives up immediately rather than retrying — retrying a
+ * rate-limited IP is how a temporary throttle becomes a permanent block.
  */
 export async function geocodeByQuery(
   query: string,
-  { delayMs = 1050 }: { delayMs?: number } = {}
+  { delayMs = 0 }: { delayMs?: number } = {}
 ): Promise<GeocodeOutcome> {
   const q = query.trim()
   if (!q) return failure()
 
-  await sleep(delayMs)
+  if (delayMs > 0) await sleep(delayMs)
 
   const params = new URLSearchParams({ q, format: 'jsonv2', addressdetails: '1', limit: '1' })
 
