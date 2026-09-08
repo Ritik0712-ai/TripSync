@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { and, desc, eq, inArray, or } from 'drizzle-orm'
 
 import { db } from '@/lib/db'
 import { trips, tripDays, stops, tripMembers } from '@/lib/db/schema'
 import { serializeTrip } from '@/lib/db/serialize'
 import { getCurrentUserId } from '@/lib/auth/server'
+import { geocodeByQuery } from '@/lib/geocode'
 
 export const dynamic = 'force-dynamic'
 
@@ -125,10 +126,33 @@ export async function POST(request: NextRequest) {
       with: { days: { with: { stops: true } } },
     })
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       trip: saved ? serializeTrip(saved, { is_owner: true }) : null,
     })
+
+    // Geocode the destination itself, not just the individual stops.
+    //
+    // Nothing set trips.destination_lat/lng, so it was null on every trip ever
+    // created — and TripWeather returns null without it. The weather panel was
+    // therefore invisible on 100% of trips, which reads as "the feature was
+    // never built" rather than "one column is empty".
+    if (body.destination) {
+      after(async () => {
+        try {
+          const outcome = await geocodeByQuery(body.destination)
+          if (outcome.lat === null) return
+          await db
+            .update(trips)
+            .set({ destinationLat: outcome.lat, destinationLng: outcome.lng })
+            .where(eq(trips.id, tripId))
+        } catch (err) {
+          console.error('[geocode] destination geocode failed:', err)
+        }
+      })
+    }
+
+    return response
   } catch (error) {
     console.error('Save trip error:', error)
     return NextResponse.json({ error: 'Failed to save trip' }, { status: 500 })

@@ -41,8 +41,20 @@ export function TripWeather({ trip }: TripWeatherProps) {
     [trip.trip_days]
   )
 
-  const lat = trip.destination_lat
-  const lng = trip.destination_lng
+  // Prefer the trip's own coordinates, but fall back to the first stop that has
+  // been geocoded. Trips created before the destination was geocoded have no
+  // coordinates of their own, and a forecast for the first stop of the trip is
+  // the same forecast for practical purposes — they are in the same city.
+  const firstGeocodedStop = useMemo(
+    () =>
+      (trip.trip_days ?? [])
+        .flatMap((d) => d.stops ?? [])
+        .find((s) => s.lat && s.lng) ?? null,
+    [trip.trip_days]
+  )
+
+  const lat = trip.destination_lat ?? firstGeocodedStop?.lat ?? null
+  const lng = trip.destination_lng ?? firstGeocodedStop?.lng ?? null
 
   useEffect(() => {
     if (!lat || !lng || !dates.length) return
