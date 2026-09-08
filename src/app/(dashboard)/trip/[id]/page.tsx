@@ -25,6 +25,7 @@ import { StopFormDialog } from '@/components/stop-form-dialog'
 import { TripSettingsDialog } from '@/components/trip-settings-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { mapsUrlForStop, mapsUrlForDay } from '@/lib/maps'
+import { saveTripOffline, getCachedTrip } from '@/lib/offline'
 
 const TripMap = dynamic(() => import('@/components/trip-map').then((m) => m.TripMap), {
   ssr: false,
@@ -36,6 +37,15 @@ const TripMapPlaceholder = dynamic(
   { ssr: false }
 )
 import type { Stop, Trip, TripDay } from '@/types/database'
+
+/** A comment as the comments endpoint returns it. */
+interface StopComment {
+  id: string
+  stop_id: string
+  user_id: string
+  content: string
+  created_at: string
+}
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   INR: '₹', USD: '$', EUR: '€', GBP: '£', AUD: 'A$',
@@ -59,14 +69,18 @@ export default function TripDetailPage() {
   const [trip, setTrip] = useState<Trip | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  // True when this trip is being served from the offline cache rather than the
+  // network. Editing is suppressed in that state — a PATCH would fail and the
+  // optimistic UI would lie about having saved.
+  const [isOffline, setIsOffline] = useState(false)
   const [selectedDay, setSelectedDay] = useState(0)
   // Mobile: which panel is visible (itinerary or map). Desktop always shows both.
   const [mobileTab, setMobileTab] = useState<'itinerary' | 'map'>('itinerary')
 
   // Votes: { stopId -> { up: number, down: number, myVote: 1|-1|0 } }
   const [voteData, setVoteData] = useState<Record<string, { up: number; down: number; myVote: number }>>({})
-  // Comments: { stopId -> Comment[] }
-  const [commentData, setCommentData] = useState<Record<string, any[]>>({})
+  // Comments: { stopId -> StopComment[] }
+  const [commentData, setCommentData] = useState<Record<string, StopComment[]>>({})
   const [commentSheetStop, setCommentSheetStop] = useState<Stop | null>(null)
   const [commentSheetOpen, setCommentSheetOpen] = useState(false)
   const [newComment, setNewComment] = useState('')
@@ -86,10 +100,36 @@ export default function TripDetailPage() {
     try {
       const response = await fetch(`/api/trips/${tripId}`)
       const data = await response.json()
-      if (data.trip) setTrip(data.trip)
-      else router.push('/dashboard')
+      if (data.trip) {
+        setTrip(data.trip)
+        setIsOffline(false)
+        // Keep the offline copy current on every successful load, so the trip
+        // is readable later without a connection. Fire and forget — a failed
+        // cache write must never block rendering the trip.
+        saveTripOffline(tripId, data.trip).catch(() => {})
+        return
+      }
+
+      // This page is reachable signed out so public trips can be previewed.
+      // A signed-out visitor who cannot see this one is far more likely to be
+      // missing an account than looking at a deleted trip, so offer sign-in
+      // and bring them back here — /dashboard would just bounce them anyway.
+      const { data: session } = await authClient.getSession()
+      if (!session?.user) {
+        router.push(`/login?redirectTo=${encodeURIComponent(`/trip/${tripId}`)}`)
+        return
+      }
+      router.push('/dashboard')
     } catch (err) {
       console.error('Error fetching trip:', err)
+      // Network is gone. Fall back to the saved copy rather than bouncing the
+      // user to a dashboard that also cannot load.
+      const cached = await getCachedTrip<Trip>(tripId)
+      if (cached) {
+        setTrip(cached)
+        setIsOffline(true)
+        return
+      }
       router.push('/dashboard')
     } finally {
       setIsLoading(false)
@@ -98,8 +138,24 @@ export default function TripDetailPage() {
 
   useEffect(() => {
     if (!tripId) return
-    authClient.getSession().then(({ data }) => setCurrentUserId(data?.user?.id ?? null))
-    loadTrip()
+
+    // Everything runs inside an async body so no state is written on the
+    // synchronous effect path, and a stale response for a previous tripId
+    // cannot overwrite the current trip.
+    let cancelled = false
+
+    void (async () => {
+      const { data } = await authClient.getSession()
+      if (!cancelled) setCurrentUserId(data?.user?.id ?? null)
+    })()
+
+    void (async () => {
+      await loadTrip()
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [tripId, loadTrip])
 
   const loadVoteData = useCallback(async (stops: Stop[]) => {
@@ -109,7 +165,14 @@ export default function TripDetailPage() {
       try {
         const res = await fetch(`/api/trips/${tripId}/stops/votes?stop_id=${stop.id}`)
         const data = await res.json()
-        results[stop.id] = { up: data.upVotes ?? 0, down: data.downVotes ?? 0, myVote: data.myVote ?? 0 }
+        // The API returns snake_case (upvotes / downvotes / user_vote). Reading
+        // camelCase here made every count render as 0 and never highlighted the
+        // user's own vote.
+        results[stop.id] = {
+          up: data.upvotes ?? 0,
+          down: data.downvotes ?? 0,
+          myVote: data.user_vote ?? 0,
+        }
       } catch {}
     }))
     setVoteData(prev => ({ ...prev, ...results }))
@@ -129,18 +192,21 @@ export default function TripDetailPage() {
   }, [tripId])
 
   const isOwner = trip ? (trip.is_owner ?? trip.owner_id === currentUserId) : false
-  const canEdit = isOwner || trip?.role === 'editor'
+  // No editing from the cached copy — every write would 503 against a network
+  // that is not there.
+  const canEdit = !isOffline && (isOwner || trip?.role === 'editor')
   const symbol = CURRENCY_SYMBOLS[trip?.currency || 'INR'] || '₹'
   const days = trip?.trip_days ?? []
   const day: TripDay | undefined = days[selectedDay]
 
-  // Load votes and comments when day changes
+  // Load votes and comments when the selected day changes.
+  const dayStops = day?.stops
   useEffect(() => {
-    if (day?.stops?.length) {
-      loadVoteData(day.stops)
-      loadCommentData(day.stops)
-    }
-  }, [day, loadVoteData, loadCommentData])
+    if (!dayStops?.length) return
+    void (async () => {
+      await Promise.all([loadVoteData(dayStops), loadCommentData(dayStops)])
+    })()
+  }, [dayStops, loadVoteData, loadCommentData])
 
   const totalCost = days.reduce(
     (sum, d) => sum + (d.stops?.reduce((s, x) => s + (x.estimated_cost || 0), 0) || 0),
@@ -894,7 +960,7 @@ export default function TripDetailPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="mt-4 space-y-3">
-            {(commentData[commentSheetStop?.id ?? ''] ?? []).map((c: any) => (
+            {(commentData[commentSheetStop?.id ?? ''] ?? []).map((c) => (
               <div key={c.id} className="border rounded-lg p-3">
                 <p className="text-sm">{c.content}</p>
                 <p className="text-xs text-gray-400 mt-1">{new Date(c.created_at).toLocaleDateString()}</p>

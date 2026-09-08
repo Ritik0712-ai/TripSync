@@ -12,14 +12,22 @@
  * saved offline via the "Save offline" message are cached.
  */
 
-const STATIC_CACHE = 'tripsync-static-v1'
-const DYNAMIC_CACHE = 'tripsync-dynamic-v1'
+const STATIC_CACHE = 'tripsync-static-v2'
+const DYNAMIC_CACHE = 'tripsync-dynamic-v2'
 
 // Static assets to precache
 const PRECACHE_URLS = [
   '/',
   '/dashboard',
 ]
+
+/**
+ * Cache key for a saved trip. Absolute URL on this origin so it matches
+ * regardless of which page did the saving.
+ */
+function cacheKeyFor(tripId) {
+  return new Request(new URL(`/api/trips/${tripId}`, self.location.origin))
+}
 
 // ─── Install ────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
@@ -58,21 +66,19 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests (maps, fonts, etc.)
   if (url.origin !== self.location.origin) return
 
-  // API routes — network only, never cache
+  // API routes — network first, never written to cache by this handler.
+  // The only API responses in the cache are trips the user explicitly saved
+  // via SAVE_TRIP_OFFLINE, so serving one back can never leak another user's
+  // data: it is the same user's own copy, put there from their own session.
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
-      fetch(request).catch(() => {
-        // Return offline JSON for trip detail routes
+      fetch(request).catch(async () => {
         if (url.pathname.match(/^\/api\/trips\/[^/]+\/?$/)) {
-          return new Response(
-            JSON.stringify({ error: 'You are offline' }),
-            {
-              status: 503,
-              headers: { 'Content-Type': 'application/json' },
-            }
-          )
+          const cache = await caches.open(DYNAMIC_CACHE)
+          const cached = await cache.match(request)
+          if (cached) return cached
         }
-        return new Response(JSON.stringify({ error: 'Offline' }), {
+        return new Response(JSON.stringify({ error: 'You are offline' }), {
           status: 503,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -87,11 +93,14 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((response) => response)
         .catch(async () => {
-          const cache = await caches.open(DYNAMIC_CACHE)
-          const cached = await cache.match('/dashboard')
-          if (cached) return cached
-          // Last resort: return the precached root
-          return (await caches.match('/')) || new Response('Offline', { status: 503 })
+          // Try the exact page first, then the precached shells. These live in
+          // STATIC_CACHE (that is where install put them) — the old code looked
+          // in DYNAMIC_CACHE and always missed.
+          const cached =
+            (await caches.match(request)) ||
+            (await caches.match('/dashboard')) ||
+            (await caches.match('/'))
+          return cached || new Response('Offline', { status: 503 })
         })
     )
     return
@@ -116,28 +125,62 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('message', (event) => {
   const { type, tripId, tripData } = event.data || {}
 
+  const port = event.ports && event.ports[0]
+  const reply = (payload) => {
+    if (port) port.postMessage(payload)
+  }
+
   if (type === 'SAVE_TRIP_OFFLINE' && tripId && tripData) {
-    caches.open(DYNAMIC_CACHE).then((cache) => {
-      const url = `/api/trips/${tripId}`
-      cache.put(url, new Response(JSON.stringify({ trip: tripData }), {
-        headers: { 'Content-Type': 'application/json' },
-      }))
-    })
-    event.ports[0]?.postMessage({ ok: true })
+    // waitUntil, so the browser does not kill the worker mid-write. Replying
+    // only after the put resolves means the caller learns about failures
+    // instead of being told "ok" for a write that never landed.
+    event.waitUntil(
+      caches
+        .open(DYNAMIC_CACHE)
+        .then((cache) =>
+          cache.put(
+            cacheKeyFor(tripId),
+            new Response(JSON.stringify({ trip: tripData }), {
+              headers: { 'Content-Type': 'application/json' },
+            })
+          )
+        )
+        .then(() => reply({ ok: true }))
+        .catch((err) => {
+          console.warn('[SW] save trip failed:', err)
+          reply({ ok: false })
+        })
+    )
     return
   }
 
   if (type === 'REMOVE_TRIP_OFFLINE' && tripId) {
-    caches.open(DYNAMIC_CACHE).then(async (cache) => {
-      const url = `/api/trips/${tripId}`
-      await cache.delete(url)
-    })
-    event.ports[0]?.postMessage({ ok: true })
+    event.waitUntil(
+      caches
+        .open(DYNAMIC_CACHE)
+        .then((cache) => cache.delete(cacheKeyFor(tripId)))
+        .then((deleted) => reply({ ok: deleted }))
+        .catch(() => reply({ ok: false }))
+    )
     return
   }
 
   if (type === 'GET_CACHED_TRIP' && tripId) {
-    event.ports[0]?.postMessage({ tripId, tripData: null })
+    // Previously hardcoded to null, which made every saved trip unreadable and
+    // the whole offline path decorative. Actually read the cache now.
+    event.waitUntil(
+      caches
+        .open(DYNAMIC_CACHE)
+        .then((cache) => cache.match(cacheKeyFor(tripId)))
+        .then(async (cached) => {
+          if (!cached) return reply({ tripId, tripData: null })
+          const body = await cached.json()
+          reply({ tripId, tripData: body.trip ?? null })
+        })
+        .catch(() => reply({ tripId, tripData: null }))
+    )
     return
   }
+
+  reply({ ok: false, error: 'Unknown message type' })
 })

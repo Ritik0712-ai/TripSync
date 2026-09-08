@@ -1,26 +1,35 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import { WifiOff } from 'lucide-react'
 
+/**
+ * Connectivity is external state that React does not own, so it is read with
+ * useSyncExternalStore rather than mirrored into useState from an effect.
+ * That avoids the extra render pass on mount and, more importantly, removes
+ * the window where the component claims to be online because the effect that
+ * checks navigator.onLine has not run yet.
+ */
+function subscribe(onChange: () => void): () => void {
+  window.addEventListener('online', onChange)
+  window.addEventListener('offline', onChange)
+  return () => {
+    window.removeEventListener('online', onChange)
+    window.removeEventListener('offline', onChange)
+  }
+}
+
+function getSnapshot(): boolean {
+  return !navigator.onLine
+}
+
+/** On the server there is no connection to report on — assume online. */
+function getServerSnapshot(): boolean {
+  return false
+}
+
 export function OfflineBanner() {
-  const [offline, setOffline] = useState(false)
-
-  useEffect(() => {
-    // Check initial state
-    setOffline(!navigator.onLine)
-
-    const handleOffline = () => setOffline(true)
-    const handleOnline = () => setOffline(false)
-
-    window.addEventListener('offline', handleOffline)
-    window.addEventListener('online', handleOnline)
-
-    return () => {
-      window.removeEventListener('offline', handleOffline)
-      window.removeEventListener('online', handleOnline)
-    }
-  }, [])
+  const offline = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 
   if (!offline) return null
 
