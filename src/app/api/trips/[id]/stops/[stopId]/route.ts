@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { stops, tripDays } from '@/lib/db/schema'
 import { serializeStop } from '@/lib/db/serialize'
 import { requireTripEditor } from '@/lib/api/guards'
+import { geocodeByQuery, buildGeocodeQuery } from '@/lib/geocode'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,7 +76,40 @@ export async function PATCH(
 
     if (!stop) return NextResponse.json({ error: 'Stop not found' }, { status: 404 })
 
-    return NextResponse.json({ stop: serializeStop(stop) })
+    const serialized = serializeStop(stop)
+    const response = NextResponse.json({ stop: serialized })
+
+    // Re-geocode if place_name or address changed. Coordinates for the old
+    // place are wrong for the new one, so clear them before fetching new ones.
+    const placeChanged = body.place_name !== undefined
+    const addressChanged = body.address !== undefined
+
+    if (placeChanged || addressChanged) {
+      const name = (updates.placeName as string | undefined) ?? stop.placeName
+      const addr = updates.address as string | undefined
+
+      if (placeChanged) {
+        // Clear stale coordinates before fetching new ones.
+        db.update(stops)
+          .set({ lat: null, lng: null })
+          .where(eq(stops.id, stopId))
+          .catch((err) => console.error('[geocode] clear coords failed:', err))
+      }
+
+      const query = buildGeocodeQuery(name, addr)
+      if (query) {
+        geocodeByQuery(query).then((outcome) => {
+          if (outcome.lat !== null) {
+            db.update(stops)
+              .set({ lat: outcome.lat, lng: outcome.lng })
+              .where(eq(stops.id, stopId))
+              .catch((err) => console.error('[geocode] db update failed:', err))
+          }
+        })
+      }
+    }
+
+    return response
   } catch (error) {
     console.error('Update stop error:', error)
     return NextResponse.json({ error: 'Failed to update stop' }, { status: 500 })

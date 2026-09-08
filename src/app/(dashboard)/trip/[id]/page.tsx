@@ -8,6 +8,7 @@ import {
   ArrowLeft, MapPin, Calendar, Users, Clock, Edit, Utensils,
   Camera, ShoppingBag, Building, Car, Mountain, ExternalLink,
   Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, Loader2,
+  MessageSquare, ThumbsUp, ThumbsDown,
 } from 'lucide-react'
 
 import { authClient } from '@/lib/auth/client'
@@ -19,8 +20,10 @@ import { Progress } from '@/components/ui/progress'
 import { Input } from '@/components/ui/input'
 import { TripShareDialog } from '@/components/trip-share-dialog'
 import { TripMembersList } from '@/components/trip-members-list'
+import { TripWeather } from '@/components/trip-weather'
 import { StopFormDialog } from '@/components/stop-form-dialog'
 import { TripSettingsDialog } from '@/components/trip-settings-dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { mapsUrlForStop, mapsUrlForDay } from '@/lib/maps'
 
 const TripMap = dynamic(() => import('@/components/trip-map').then((m) => m.TripMap), {
@@ -60,6 +63,15 @@ export default function TripDetailPage() {
   // Mobile: which panel is visible (itinerary or map). Desktop always shows both.
   const [mobileTab, setMobileTab] = useState<'itinerary' | 'map'>('itinerary')
 
+  // Votes: { stopId -> { up: number, down: number, myVote: 1|-1|0 } }
+  const [voteData, setVoteData] = useState<Record<string, { up: number; down: number; myVote: number }>>({})
+  // Comments: { stopId -> Comment[] }
+  const [commentData, setCommentData] = useState<Record<string, any[]>>({})
+  const [commentSheetStop, setCommentSheetStop] = useState<Stop | null>(null)
+  const [commentSheetOpen, setCommentSheetOpen] = useState(false)
+  const [newComment, setNewComment] = useState('')
+  const [postingComment, setPostingComment] = useState(false)
+
   const [editMode, setEditMode] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -90,11 +102,45 @@ export default function TripDetailPage() {
     loadTrip()
   }, [tripId, loadTrip])
 
+  const loadVoteData = useCallback(async (stops: Stop[]) => {
+    if (!stops.length) return
+    const results: typeof voteData = {}
+    await Promise.all(stops.map(async (stop) => {
+      try {
+        const res = await fetch(`/api/trips/${tripId}/stops/votes?stop_id=${stop.id}`)
+        const data = await res.json()
+        results[stop.id] = { up: data.upVotes ?? 0, down: data.downVotes ?? 0, myVote: data.myVote ?? 0 }
+      } catch {}
+    }))
+    setVoteData(prev => ({ ...prev, ...results }))
+  }, [tripId])
+
+  const loadCommentData = useCallback(async (stops: Stop[]) => {
+    if (!stops.length) return
+    const results: typeof commentData = {}
+    await Promise.all(stops.map(async (stop) => {
+      try {
+        const res = await fetch(`/api/trips/${tripId}/stops/comments?stop_id=${stop.id}`)
+        const data = await res.json()
+        results[stop.id] = data.comments ?? []
+      } catch {}
+    }))
+    setCommentData(prev => ({ ...prev, ...results }))
+  }, [tripId])
+
   const isOwner = trip ? (trip.is_owner ?? trip.owner_id === currentUserId) : false
   const canEdit = isOwner || trip?.role === 'editor'
   const symbol = CURRENCY_SYMBOLS[trip?.currency || 'INR'] || '₹'
   const days = trip?.trip_days ?? []
   const day: TripDay | undefined = days[selectedDay]
+
+  // Load votes and comments when day changes
+  useEffect(() => {
+    if (day?.stops?.length) {
+      loadVoteData(day.stops)
+      loadCommentData(day.stops)
+    }
+  }, [day, loadVoteData, loadCommentData])
 
   const totalCost = days.reduce(
     (sum, d) => sum + (d.stops?.reduce((s, x) => s + (x.estimated_cost || 0), 0) || 0),
@@ -160,6 +206,49 @@ export default function TripDetailPage() {
       { method: 'DELETE' },
       'Could not delete the stop'
     )
+  }
+
+  const castVote = async (stopId: string, vote: 1 | -1) => {
+    if (!currentUserId) return
+    const current = voteData[stopId]?.myVote ?? 0
+    const next = current === vote ? 0 : vote
+    // Optimistic update
+    setVoteData(prev => ({
+      ...prev,
+      [stopId]: {
+        up: prev[stopId]?.up ?? 0,
+        down: prev[stopId]?.down ?? 0,
+        myVote: next,
+      }
+    }))
+    try {
+      await fetch(`/api/trips/${tripId}/stops/votes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ stop_id: stopId, vote: next }),
+      })
+    } catch {
+      // Revert on failure — reload from server
+      loadVoteData(day?.stops ?? [])
+    }
+  }
+
+  const postComment = async () => {
+    if (!currentUserId || !commentSheetStop || !newComment.trim()) return
+    setPostingComment(true)
+    try {
+      const res = await fetch(`/api/trips/${tripId}/stops/comments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ stop_id: commentSheetStop.id, content: newComment }),
+      })
+      if (res.ok) {
+        setNewComment('')
+        await loadCommentData(day?.stops ?? [])
+      }
+    } finally {
+      setPostingComment(false)
+    }
   }
 
   const addDay = async () => {
@@ -338,6 +427,21 @@ export default function TripDetailPage() {
               {trip.interests.map((interest) => (
                 <Badge key={interest} variant="secondary">{interest}</Badge>
               ))}
+            </div>
+          )}
+
+          {/* Weather forecast badges — only shown when coordinates are available */}
+          <div className="mt-6">
+            <TripWeather trip={trip as never} />
+          </div>
+
+          {/* Per-person cost when sharing with a group */}
+          {trip.group_size > 1 && trip.budget_total && (
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+              <p className="text-sm text-blue-700">
+                <span className="font-semibold">{symbol}{(trip.budget_total / trip.group_size).toLocaleString()} per person</span>
+                <span className="text-blue-600"> ({trip.group_size} travellers)</span>
+              </p>
             </div>
           )}
         </CardContent>
@@ -543,6 +647,38 @@ export default function TripDetailPage() {
                               <ExternalLink className="w-3 h-3" />
                               Maps
                             </a>
+
+                            {/* Vote buttons */}
+                            {currentUserId && (
+                              <span className="flex items-center gap-1 text-gray-500">
+                                <button
+                                  onClick={() => castVote(stop.id, 1)}
+                                  className={`p-1 rounded hover:bg-gray-100 transition-colors ${voteData[stop.id]?.myVote === 1 ? 'text-green-600' : 'text-gray-400'}`}
+                                  aria-label="Upvote"
+                                >
+                                  <ThumbsUp className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="text-xs min-w-[1rem] text-center">
+                                  {(voteData[stop.id]?.up ?? 0) - (voteData[stop.id]?.down ?? 0)}
+                                </span>
+                                <button
+                                  onClick={() => castVote(stop.id, -1)}
+                                  className={`p-1 rounded hover:bg-gray-100 transition-colors ${voteData[stop.id]?.myVote === -1 ? 'text-red-600' : 'text-gray-400'}`}
+                                  aria-label="Downvote"
+                                >
+                                  <ThumbsDown className="w-3.5 h-3.5" />
+                                </button>
+                              </span>
+                            )}
+
+                            {/* Comment button */}
+                            <button
+                              onClick={() => { setCommentSheetStop(stop); setCommentSheetOpen(true) }}
+                              className="flex items-center gap-1 text-gray-500 hover:text-blue-600 text-sm transition-colors"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>{(commentData[stop.id] ?? []).length}</span>
+                            </button>
                           </div>
 
                           {stop.notes && (
@@ -748,6 +884,42 @@ export default function TripDetailPage() {
           onSaved={loadTrip}
         />
       )}
+
+      {/* Comment dialog */}
+      <Dialog open={commentSheetOpen} onOpenChange={setCommentSheetOpen}>
+        <DialogContent className="max-h-[70vh] overflow-y-auto max-w-lg mx-auto bottom-0 fixed left-0 right-0 rounded-t-xl rounded-b-lg translate-y-0 top-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {commentSheetStop?.place_name ?? 'Comments'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-4 space-y-3">
+            {(commentData[commentSheetStop?.id ?? ''] ?? []).map((c: any) => (
+              <div key={c.id} className="border rounded-lg p-3">
+                <p className="text-sm">{c.content}</p>
+                <p className="text-xs text-gray-400 mt-1">{new Date(c.created_at).toLocaleDateString()}</p>
+              </div>
+            ))}
+            {!(commentData[commentSheetStop?.id ?? ''] ?? []).length && (
+              <p className="text-gray-400 text-sm text-center py-4">No comments yet — be the first!</p>
+            )}
+          </div>
+          {currentUserId && (
+            <div className="mt-4 flex gap-2">
+              <Input
+                placeholder="Add a comment…"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && postComment()}
+                disabled={postingComment}
+              />
+              <Button onClick={postComment} disabled={postingComment || !newComment.trim()}>
+                {postingComment ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Post'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

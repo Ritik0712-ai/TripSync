@@ -128,3 +128,67 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  /* Hide everything except the itinerary content */
+  nav,
+  header,
+  footer,
+  .no-print,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* White background, black text — save ink */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+  }
+
+  /* Allow pages to break inside day sections but keep stops together */
+  .stop-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .day-section {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  /* Hide interactive controls */
+  button,
+  input,
+  select,
+  [role='button'],
+  a:not([href^='http']) {
+    display: none !important;
+  }
+
+  /* Show essential links */
+  a[href]::after {
+    content: none;
+  }
+
+  /* Remove shadows and rounded corners */
+  .rounded-lg,
+  .shadow,
+  .shadow-md,
+  .shadow-sm {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Consistent spacing */
+  .day-section {
+    margin-bottom: 1.5rem !important;
+    padding: 0.5rem !important;
+    border: 1px solid #ccc !important;
+  }
+
+  /* Hide edit indicators */
+  .edit-indicator {
+    display: none !important;
+  }
+}

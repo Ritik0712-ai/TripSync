@@ -5,11 +5,17 @@ import { db } from '@/lib/db'
 import { stops, tripDays } from '@/lib/db/schema'
 import { serializeStop } from '@/lib/db/serialize'
 import { requireTripEditor } from '@/lib/api/guards'
+import { geocodeByQuery, buildGeocodeQuery } from '@/lib/geocode'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/trips/:id/stops — add a stop to a day.
+ *
+ * Geocoding runs after the response is returned (non-blocking). The trip page
+ * re-fetches on load, so coordinates appear within seconds. This keeps stop
+ * creation fast and prevents a slow Nominatim lookup from timing out callers
+ * like the AI generation flow.
  *
  * Stops are addressed as `/trips/:id/stops/:stopId` rather than nested under
  * `/days/:dayId/stops/:stopId`. A stop already carries its day_id, so nesting
@@ -74,7 +80,28 @@ export async function POST(
       })
       .returning()
 
-    return NextResponse.json({ stop: serializeStop(stop) }, { status: 201 })
+    const serialized = serializeStop(stop)
+    const response = NextResponse.json({ stop: serialized }, { status: 201 })
+
+    // Non-blocking geocode. The response is already sent — geocoding runs after.
+    // If it fails the stop still exists with lat/lng = null and the UI degrades
+    // gracefully via mapsUrlForStop's text-query fallback.
+    const query = buildGeocodeQuery(
+      stop.placeName,
+      stop.address ?? undefined
+    )
+    if (query) {
+      geocodeByQuery(query).then((outcome) => {
+        if (outcome.lat !== null) {
+          db.update(stops)
+            .set({ lat: outcome.lat, lng: outcome.lng })
+            .where(eq(stops.id, stop.id))
+            .catch((err) => console.error('[geocode] db update failed:', err))
+        }
+      })
+    }
+
+    return response
   } catch (error) {
     console.error('Create stop error:', error)
     return NextResponse.json({ error: 'Failed to create stop' }, { status: 500 })

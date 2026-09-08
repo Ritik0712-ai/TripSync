@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Check, Link2, Users, Mail } from 'lucide-react'
+import { Copy, Check, Link2, Users, Mail, Calendar, MessageCircle } from 'lucide-react'
+import { downloadICS } from '@/lib/ics'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -167,6 +168,40 @@ export function TripShareDialog({ trip, currentUserId, isOwner, onMembersUpdate 
                   )}
                 </Button>
               </div>
+            </div>
+
+            {/* Export shortcuts */}
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(`${trip.title} — ${shareUrl}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+              >
+                <MessageCircle className="w-4 h-4" />
+                WhatsApp
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  const icsTrip = {
+                    title: trip.title,
+                    start_date: trip.start_date ?? null,
+                    days: (trip.trip_days ?? []).map((d: any) => ({
+                      ...d,
+                      stops: (d.stops ?? []).map((s: any) => ({
+                        ...s,
+                        date: d.date,
+                      })),
+                    })),
+                  }
+                  downloadICS(icsTrip)
+                }}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                <Calendar className="w-4 h-4" />
+                Export calendar
+              </button>
             </div>
 
             {isOwner ? (

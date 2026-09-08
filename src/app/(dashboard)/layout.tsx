@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { authClient } from '@/lib/auth/client'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { OfflineBanner } from '@/components/offline-banner'
 import { 
   MapPin, Plus, LayoutDashboard, Map, LogOut, Menu, X, User
 } from 'lucide-react'
@@ -43,6 +44,15 @@ export default function DashboardLayout({
       cancelled = true
     }
   }, [router])
+
+  // Register service worker for PWA / offline support
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('[SW] registration failed:', err)
+      })
+    }
+  }, [])
 
   const handleSignOut = async () => {
     await authClient.signOut()
@@ -184,6 +194,8 @@ export default function DashboardLayout({
       <main className="max-w-7xl mx-auto px-4 py-8">
         {children}
       </main>
+
+      <OfflineBanner />
     </div>
   )
 }
