@@ -32,6 +32,15 @@ const SKIP_ROUTES = [
   '/login',
   '/signup',
   '/join',
+  // Public trip templates are the discovery surface — a stranger following a
+  // shared link should land on the trip, not on a login wall. Cloning one
+  // still requires an account; that check lives in the clone route.
+  '/trips/public',
+  // Trip pages are shells: they render nothing until GET /api/trips/:id
+  // answers, and that route already refuses anything the caller cannot see.
+  // Un-protecting the page lets a public trip be previewed signed out without
+  // widening what the API will hand over — a private trip still 404s here.
+  '/trip',
 ]
 
 export default async function proxy(request: NextRequest) {

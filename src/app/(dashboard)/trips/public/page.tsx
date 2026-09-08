@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Search, Copy, MapPin, Calendar, Users } from 'lucide-react'
 
-import { authClient } from '@/lib/auth/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -34,7 +33,13 @@ export default function PublicTripsPage() {
     }
   }
 
-  useEffect(() => { loadTrips() }, [])
+  useEffect(() => {
+    // Initial load only — searching calls loadTrips directly from the form.
+    void (async () => {
+      await loadTrips()
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,6 +54,14 @@ export default function PublicTripsPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ trip_id: tripId }),
       })
+      // This page is now reachable signed out, so cloning is the first thing
+      // that actually needs an account. Send them to sign in and bring them
+      // back here rather than showing a bare "Unauthorized".
+      if (res.status === 401) {
+        router.push(`/login?redirectTo=${encodeURIComponent('/trips/public')}`)
+        return
+      }
+
       const data = await res.json()
       if (res.ok && data.trip_id) {
         router.push(`/trip/${data.trip_id}`)
