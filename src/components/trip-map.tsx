@@ -2,6 +2,14 @@
 
 import { useEffect, useRef } from 'react'
 import type { Map as LeafletMap, Marker, Polyline } from 'leaflet'
+
+// Leaflet ships its own stylesheet and does not work without it. Skipping this
+// import does not throw — the map "renders", but every tile is stacked at the
+// same position with no size, the zoom control loses its buttons and shows as
+// a bare "+ −", and the attribution collapses into the word "Leaflet" on an
+// empty panel. That is the entire symptom: a blank box with "+ − Leaflet".
+import 'leaflet/dist/leaflet.css'
+
 import type { Stop } from '@/types/database'
 
 // ---------------------------------------------------------------------------
