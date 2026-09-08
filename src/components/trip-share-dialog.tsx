@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Copy, Check, Link2, Users, Mail, Calendar, MessageCircle } from 'lucide-react'
-import { downloadICS } from '@/lib/ics'
+import { downloadICS, type ICSTrip } from '@/lib/ics'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -184,14 +184,24 @@ export function TripShareDialog({ trip, currentUserId, isOwner, onMembersUpdate 
               <button
                 type="button"
                 onClick={() => {
-                  const icsTrip = {
+                  const icsTrip: ICSTrip = {
                     title: trip.title,
                     start_date: trip.start_date ?? null,
-                    days: (trip.trip_days ?? []).map((d: any) => ({
-                      ...d,
-                      stops: (d.stops ?? []).map((s: any) => ({
-                        ...s,
-                        date: d.date,
+                    url: shareUrl,
+                    days: (trip.trip_days ?? []).map((d) => ({
+                      day_title: d.day_title ?? null,
+                      date: d.date ?? null,
+                      stops: (d.stops ?? []).map((s) => ({
+                        id: s.id,
+                        place_name: s.place_name,
+                        address: s.address ?? null,
+                        start_time: s.start_time ?? null,
+                        duration_minutes: s.duration_minutes ?? null,
+                        notes: s.notes ?? null,
+                        // A stop inherits its day's date; the day is the only
+                        // place a date actually lives.
+                        date: d.date ?? trip.start_date ?? '',
+                        day_title: d.day_title ?? null,
                       })),
                     })),
                   }
