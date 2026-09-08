@@ -81,5 +81,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .onConflictDoUpdate({ target: [stopVotes.stopId, stopVotes.userId], set: { vote } })
   }
 
-  return NextResponse.json({ success: true })
+  // Return authoritative counts so the client doesn't need a second round-trip.
+  const counts = await db
+    .select({
+      upvotes: sql<number>`count(*) filter (where ${stopVotes.vote} = 1)`,
+      downvotes: sql<number>`count(*) filter (where ${stopVotes.vote} = -1)`,
+    })
+    .from(stopVotes)
+    .where(eq(stopVotes.stopId, stop_id))
+
+  return NextResponse.json({ success: true, upvotes: counts[0]?.upvotes ?? 0, downvotes: counts[0]?.downvotes ?? 0 })
 }

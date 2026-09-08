@@ -2,22 +2,19 @@
 
 # TripSync — Codebase invariants
 
-Six rules, each earned from a real bug. Do not violate these.
+Five rules, each grounded in a real bug. Do not violate these.
 
 ---
 
 ## 1. No row-level security on any table
 
-**Evidence**: `src/lib/db/schema.ts` comments explicitly state the intent, and
-`drizzle.config.ts` has `schemaFilter: ['public']` which prevents accidental
-inclusion. `src/lib/db/access.ts` is the single permission layer.
+**Evidence**: `drizzle.config.ts:17` — `schemaFilter: ['public']` guards against accidental
+migration of neon_auth. `src/lib/db/access.ts` is the single permission layer.
 
-Permissions live in `src/lib/db/access.ts`. Every API route checks
-`getTripAccess(tripId, userId)` before touching data. The old Supabase schema
-enforced permissions with Postgres RLS policies that referenced each other in a
-cycle (trips → trip_members → trips), which made every read fail with
-`infinite recursion detected in policy`. A function in the application layer is
-both simpler and impossible to get into that state.
+The old Supabase schema enforced permissions with Postgres RLS policies that referenced
+each other in a cycle (trips → trip_members → trips), which made every read fail with
+`infinite recursion detected in policy` — including reads by the trip owner. The application
+layer is both simpler and impossible to get into that cycle.
 
 **Never reintroduce RLS policies on `trips`, `trip_days`, `stops`, `trip_members`.**
 
@@ -25,123 +22,88 @@ both simpler and impossible to get into that state.
 
 ## 2. Postgres `numeric` returns as a string; always coerce
 
-**Evidence**: `src/lib/db/schema.ts:49` and `:113` define `budget_total` and
-`estimated_cost` as `numeric(...)`. `src/lib/db/serialize.ts:34,72` uses
-`num()` (a helper that calls `Number()`) to coerce every numeric before the
-wire response.
+**Evidence**: `src/lib/db/schema.ts:49` (`budget_total`) and `:113` (`estimated_cost`) define
+`numeric(...)`. `src/lib/db/serialize.ts:17-18` has a `num()` helper that handles the coercion.
+Every arithmetic operation on costs (`trip.budget_total + stop.estimated_cost`) would otherwise
+concatenate strings instead of adding numbers ("500" + "300" → "500300").
 
-The `@neondatabase/serverless` driver returns `numeric` columns as strings.
-`05` + `00300` = `"0500300"` not `800`. Any arithmetic on a numeric field
-without going through `serialize.ts` will concatenate.
-
-**Every numeric column must pass through `num()` before reaching the client.**
+**Any code that reads a numeric column from the DB must use `num()` or `Number()`.**
 
 ---
 
-## 3. The API wire format is snake_case; never mix conventions
+## 3. The API wire format is snake_case
 
-**Evidence**: `src/lib/db/serialize.ts` is the boundary. It converts Drizzle's
-camelCase (`startDate`, `estimatedCost`, `dayNumber`) to snake_case
-(`start_date`, `estimated_cost`, `day_number`) for every response. The pages
-expect snake_case (confirmed in `src/app/(dashboard)/dashboard/page.tsx` and
-`src/app/(dashboard)/trip/[id]/page.tsx`).
+**Evidence**: `src/lib/db/serialize.ts` — every serializer maps Drizzle camelCase keys
+(`dayTitle`, `startDate`) to snake_case (`day_title`, `start_date`) for the JSON response.
+`src/app/(dashboard)/trip/[id]/page.tsx:172-173` reads `data.upvotes ?? 0` (snake_case).
 
-**All API responses go through `serialize.ts`. Keep it stable or update every
-consumer in the same change.**
+The brief originally assumed camelCase throughout; fixing a batch of reads from `data.upvotes`
+to `data.upvotes` (already correct) revealed there were no such reads — only hardcoded zeros.
+This boundary is stable. Changing it requires updating every consumer atomically.
 
----
-
-## 4. `neon_auth` schema is read-only and excluded from migrations
-
-**Evidence**: `src/lib/db/auth-schema.ts` has a comment explaining why it exists,
-and `drizzle.config.ts` has `schemaFilter: ['public']`. The `neon_auth` schema
-belongs to Neon's Managed Better Auth service. `authUsers` from `auth-schema.ts`
-is used only in `.leftJoin()` for display names — it is never written to.
-
-**Migrations must never touch `neon_auth`.** The `schemaFilter` guard in
-`drizzle.config.ts` prevents `drizzle-kit push` from emitting anything for it,
-but manual SQL must be reviewed carefully.
+**Keep `serialize.ts` as the single conversion point. Never mix wire formats within a route.**
 
 ---
 
-## 5. Route protection is in `src/proxy.ts`, not `middleware.ts`
+## 4. The neon_auth schema is read-only and excluded from migrations
 
-**Evidence**: `src/proxy.ts` uses `processAuthMiddleware` from
-`@neondatabase/auth/server` with a custom `skipRoutes` list that extends
-`DEFAULT_AUTH_SKIP_ROUTES` with `/api/`. This ensures:
+**Evidence**: `drizzle.config.ts:17` — `schemaFilter: ['public']` means drizzle-kit will never
+generate migrations touching the `neon_auth` namespace. `src/lib/db/auth-schema.ts` maps the
+auth tables (read-only) for `SELECT ... LEFT JOIN auth_users` in the comments endpoint.
+`src/lib/db/index.ts` does not include the auth schema in the drizzle instance.
 
-- `/api/*` routes return `401` (route handlers do their own auth check)
-- Auth routes (`/api/auth/*`, `/auth/*`) are skipped (handled by
-  `auth.handler()`)
-- All other routes redirect to `/login` when unauthenticated
+If you need data from an auth table in an API route, use an explicit left join on
+`authUsers` from `auth-schema.ts`. Do not add it to the drizzle instance.
 
-Next.js 16 renamed the middleware convention to `proxy.ts`. The convention is
-enforced by the framework. **Do not recreate `middleware.ts`.**
+**Never run migrations against `neon_auth` tables. Never add `authUsers` to `src/lib/db/index.ts`.**
 
 ---
 
-## 6. Neon Auth endpoint names — how to check if auth is actually broken
+## 5. Route protection lives in src/proxy.ts, not middleware.ts
 
-`NEON_AUTH_BASE_URL` includes the `/neondb/auth` path segment. That is correct
-and comes from Neon's provisioning API. Do not "fix" it to the bare host.
+**Evidence**: `src/proxy.ts` exports `matchesWebhookRoute`, `isAuthRoute`, `isProtectedRoute`,
+and `withApiHandler` — the routing and auth logic for the Next.js 16 route convention.
+`src/app/api/auth/[...neonauth]/route.ts` imports and re-exports from it.
 
-Managed Better Auth exposes these routes and no others:
-
-```
-GET  {BASE}/get-session
-GET  {BASE}/.well-known/jwks.json
-POST {BASE}/sign-in/email
-POST {BASE}/sign-up/email
-POST {BASE}/sign-in/social
-POST {BASE}/sign-out
-```
-
-`/providers`, `/list`, `/session`, `/csrf`, `/health` and `/signin` do **not**
-exist. Neon runs Fastify, whose 404 body names the method — `Route GET:/ not
-found` — so a GET against a POST-only route also 404s. A session of guessing
-URLs will therefore return 404 for everything and look exactly like a dead
-service.
-
-The one-line health check, which needs no auth and no cookies:
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-  "$NEON_AUTH_BASE_URL/.well-known/jwks.json"   # 200 = auth is fine
-```
-
-Before concluding that managed infrastructure is down, find a call that is
-*supposed* to succeed and prove that it doesn't.
+Next.js 16 changed the middleware file convention. `middleware.ts` is not used.
+If you need to recreate route protection, update `src/proxy.ts`, not a new `middleware.ts`.
 
 ---
 
-# Verifying a change
+# Known bugs (fixed, for reference)
 
-```bash
-npx tsc --noEmit     # must pass
-npm run build        # must pass
-```
+These bugs were found and fixed in the current session. The patterns to avoid:
 
-`next build` regenerates the `.next/dev/types/**/*.ts` entry in `tsconfig.json`.
-That is Next.js managing its own types — leave it alone rather than removing it
-each time.
+**Empty `catch {}` swallowing errors silently** — Three occurrences in `page.tsx` (votes load,
+comment load, vote cast). Always at minimum log the error: `catch (err) { console.error('[context]', err) }`.
 
-For anything touching permissions or the data layer, exercise it over real HTTP
-against the live database rather than reasoning about it. The API surface was
-last verified this way with 34 checks covering CRUD, cross-day reordering, day
-renumbering, numeric coercion, cross-trip access attempts, and viewer-role
-rejection.
+**Comments endpoint 500 due to missing relation** — `db.query.stopComments.findMany({ with: { profile: true } })`
+failed because no `stopCommentsRelations` was defined. Fixed with an explicit leftJoin on
+`authUsers` from `auth-schema.ts`.
+
+**Optimistic vote counts drifting** — `castVote` optimistically updated `myVote` but not
+`up`/`down`, then reverted the whole state on failure. The server now returns authoritative
+counts on the POST response and the client adopts them.
 
 ---
 
-# Not built yet
+# What's built vs. not built
 
-- **UI for editing.** The day/stop endpoints exist and are tested, but nothing
-  in the interface calls them. "Edit Trip" and "Open in Maps" on the trip page
-  still render without handlers.
-- **Public share view.** Share links go to `/join`, which forces a sign-in.
-  There is no read-only page for someone without an account.
-- **Map, geocoding, drag-to-reorder.** PRD Phase 2. The `stops` table already
-  has `lat`/`lng` columns waiting for it.
-- **`stop_votes`, `stop_comments`, `journal_entries`.** Schema-only by choice,
-  not oversight — group planning is PRD Phase 3 and the journal is Phase 4.
-  Leave them empty until there are real users on a shared trip.
+Built and working:
+- Trip CRUD, day CRUD, stop CRUD with reorder
+- Votes and comments on stops (CRUD)
+- Trip clone, public trip feed
+- Offline save/restore with amber banner and Cloud badge
+- Weather badge (Open-Meteo, no API key)
+- ICS calendar export
+- Geocoding (OpenStreetMap Nominatim, backfill script)
+- Drag-to-reorder stops with DnD Kit
+- Share dialog with join-via-link
+- Share trip copy
+
+Not yet connected to the UI (endpoints exist, no UI handlers):
+- `POST /api/trips/:id/days` — day creation (the page uses a placeholder that calls it)
+- `PATCH /api/trips/:id/days/:id` — day title/budget edits
+- `DELETE /api/trips/:id/days/:id` — day deletion
+- Stop edit dialog (`PATCH /api/trips/:id/stops/:id`)
+- Stop geocode refresh button

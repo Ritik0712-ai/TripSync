@@ -134,18 +134,19 @@ self.addEventListener('message', (event) => {
     // waitUntil, so the browser does not kill the worker mid-write. Replying
     // only after the put resolves means the caller learns about failures
     // instead of being told "ok" for a write that never landed.
+    const savedAt = new Date().toISOString()
     event.waitUntil(
       caches
         .open(DYNAMIC_CACHE)
         .then((cache) =>
           cache.put(
             cacheKeyFor(tripId),
-            new Response(JSON.stringify({ trip: tripData }), {
+            new Response(JSON.stringify({ trip: tripData, savedAt }), {
               headers: { 'Content-Type': 'application/json' },
             })
           )
         )
-        .then(() => reply({ ok: true }))
+        .then(() => reply({ ok: true, savedAt }))
         .catch((err) => {
           console.warn('[SW] save trip failed:', err)
           reply({ ok: false })
@@ -166,18 +167,32 @@ self.addEventListener('message', (event) => {
   }
 
   if (type === 'GET_CACHED_TRIP' && tripId) {
-    // Previously hardcoded to null, which made every saved trip unreadable and
-    // the whole offline path decorative. Actually read the cache now.
     event.waitUntil(
       caches
         .open(DYNAMIC_CACHE)
         .then((cache) => cache.match(cacheKeyFor(tripId)))
         .then(async (cached) => {
-          if (!cached) return reply({ tripId, tripData: null })
+          if (!cached) return reply({ tripId, tripData: null, savedAt: null })
           const body = await cached.json()
-          reply({ tripId, tripData: body.trip ?? null })
+          reply({ tripId, tripData: body.trip ?? null, savedAt: body.savedAt ?? null })
         })
-        .catch(() => reply({ tripId, tripData: null }))
+        .catch(() => reply({ tripId, tripData: null, savedAt: null }))
+    )
+    return
+  }
+
+  // Lightweight check: does the SW have a cached copy of this trip?
+  if (type === 'CHECK_SAVED' && tripId) {
+    event.waitUntil(
+      caches
+        .open(DYNAMIC_CACHE)
+        .then((cache) => cache.match(cacheKeyFor(tripId)))
+        .then(async (cached) => {
+          if (!cached) return reply({ tripId, saved: false, savedAt: null })
+          const body = await cached.json()
+          reply({ tripId, saved: true, savedAt: body.savedAt ?? null })
+        })
+        .catch(() => reply({ tripId, saved: false, savedAt: null }))
     )
     return
   }

@@ -26,40 +26,28 @@ function controller(): ServiceWorker | null {
 function request<T>(message: Record<string, unknown>): Promise<T | null> {
   const sw = controller()
   if (!sw) return Promise.resolve(null)
-
-  return new Promise<T | null>((resolve) => {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(null), TIMEOUT_MS)
     const channel = new MessageChannel()
-    const timer = setTimeout(() => {
-      channel.port1.close()
-      resolve(null)
-    }, TIMEOUT_MS)
-
     channel.port1.onmessage = (event) => {
-      clearTimeout(timer)
-      channel.port1.close()
-      resolve((event.data ?? null) as T | null)
+      clearTimeout(timeout)
+      resolve(event.data as T)
     }
-
-    try {
-      sw.postMessage(message, [channel.port2])
-    } catch {
-      clearTimeout(timer)
-      resolve(null)
-    }
+    sw.postMessage(message, [channel.port2])
   })
 }
 
-/** Cache a trip so it opens without a network connection. */
+/** Save a trip for offline access. Returns the ISO timestamp if saved, null if not. */
 export async function saveTripOffline(
   tripId: string,
   tripData: unknown
-): Promise<boolean> {
-  const result = await request<{ ok?: boolean }>({
+): Promise<string | null> {
+  const result = await request<{ ok?: boolean; savedAt?: string }>({
     type: 'SAVE_TRIP_OFFLINE',
     tripId,
     tripData,
   })
-  return Boolean(result?.ok)
+  return result?.ok ? (result.savedAt ?? null) : null
 }
 
 /** Drop a trip from the offline cache. */
@@ -71,13 +59,33 @@ export async function removeTripOffline(tripId: string): Promise<boolean> {
   return Boolean(result?.ok)
 }
 
-/** Read a cached trip, or null if this trip was never saved. */
+/**
+ * Read a cached trip. Returns { trip, savedAt } or null if not saved.
+ * Use `checkTripSaved` for a lightweight presence check without loading trip data.
+ */
 export async function getCachedTrip<T = unknown>(
   tripId: string
-): Promise<T | null> {
-  const result = await request<{ tripData?: T | null }>({
+): Promise<{ trip: T | null; savedAt: string | null }> {
+  const result = await request<{ tripData?: T | null; savedAt?: string | null }>({
     type: 'GET_CACHED_TRIP',
     tripId,
   })
-  return (result?.tripData ?? null) as T | null
+  return {
+    trip: result?.tripData ?? null,
+    savedAt: result?.savedAt ?? null,
+  }
+}
+
+/** Lightweight check: is this trip saved for offline? Returns null on failure. */
+export async function checkTripSaved(
+  tripId: string
+): Promise<{ saved: boolean; savedAt: string | null }> {
+  const result = await request<{ saved?: boolean; savedAt?: string | null }>({
+    type: 'CHECK_SAVED',
+    tripId,
+  })
+  return {
+    saved: Boolean(result?.saved),
+    savedAt: result?.savedAt ?? null,
+  }
 }

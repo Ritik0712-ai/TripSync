@@ -8,7 +8,7 @@ import {
   ArrowLeft, MapPin, Calendar, Users, Clock, Edit, Utensils,
   Camera, ShoppingBag, Building, Car, Mountain, ExternalLink,
   Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, Loader2,
-  MessageSquare, ThumbsUp, ThumbsDown,
+  MessageSquare, ThumbsUp, ThumbsDown, Download, WifiOff, Cloud,
 } from 'lucide-react'
 
 import { authClient } from '@/lib/auth/client'
@@ -25,7 +25,7 @@ import { StopFormDialog } from '@/components/stop-form-dialog'
 import { TripSettingsDialog } from '@/components/trip-settings-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { mapsUrlForStop, mapsUrlForDay } from '@/lib/maps'
-import { saveTripOffline, getCachedTrip } from '@/lib/offline'
+import { saveTripOffline, getCachedTrip, checkTripSaved, removeTripOffline } from '@/lib/offline'
 
 const TripMap = dynamic(() => import('@/components/trip-map').then((m) => m.TripMap), {
   ssr: false,
@@ -45,6 +45,8 @@ interface StopComment {
   user_id: string
   content: string
   created_at: string
+  author_name: string
+  author_image: string | null
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -73,6 +75,8 @@ export default function TripDetailPage() {
   // network. Editing is suppressed in that state — a PATCH would fail and the
   // optimistic UI would lie about having saved.
   const [isOffline, setIsOffline] = useState(false)
+  // Whether this trip has been saved for offline access. null = not checked yet.
+  const [savedOffline, setSavedOffline] = useState<{ saved: boolean; savedAt: string | null } | null>(null)
   const [selectedDay, setSelectedDay] = useState(0)
   // Mobile: which panel is visible (itinerary or map). Desktop always shows both.
   const [mobileTab, setMobileTab] = useState<'itinerary' | 'map'>('itinerary')
@@ -106,7 +110,8 @@ export default function TripDetailPage() {
         // Keep the offline copy current on every successful load, so the trip
         // is readable later without a connection. Fire and forget — a failed
         // cache write must never block rendering the trip.
-        saveTripOffline(tripId, data.trip).catch(() => {})
+        const savedAt = await saveTripOffline(tripId, data.trip)
+        if (savedAt) setSavedOffline({ saved: true, savedAt })
         return
       }
 
@@ -124,10 +129,11 @@ export default function TripDetailPage() {
       console.error('Error fetching trip:', err)
       // Network is gone. Fall back to the saved copy rather than bouncing the
       // user to a dashboard that also cannot load.
-      const cached = await getCachedTrip<Trip>(tripId)
+      const { trip: cached, savedAt } = await getCachedTrip<Trip>(tripId)
       if (cached) {
         setTrip(cached)
         setIsOffline(true)
+        setSavedOffline({ saved: true, savedAt: savedAt ?? null })
         return
       }
       router.push('/dashboard')
@@ -135,6 +141,12 @@ export default function TripDetailPage() {
       setIsLoading(false)
     }
   }, [tripId, router])
+
+  // Check whether this trip is saved for offline on mount.
+  useEffect(() => {
+    if (!tripId) return
+    checkTripSaved(tripId).then(result => setSavedOffline(result)).catch(() => {})
+  }, [tripId])
 
   useEffect(() => {
     if (!tripId) return
@@ -173,7 +185,9 @@ export default function TripDetailPage() {
           down: data.downvotes ?? 0,
           myVote: data.user_vote ?? 0,
         }
-      } catch {}
+      } catch (err) {
+        console.error(`[votes] failed to load for stop ${stop.id}:`, err)
+      }
     }))
     setVoteData(prev => ({ ...prev, ...results }))
   }, [tripId])
@@ -184,9 +198,12 @@ export default function TripDetailPage() {
     await Promise.all(stops.map(async (stop) => {
       try {
         const res = await fetch(`/api/trips/${tripId}/stops/comments?stop_id=${stop.id}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         results[stop.id] = data.comments ?? []
-      } catch {}
+      } catch (err) {
+        console.error(`[comments] failed to load for stop ${stop.id}:`, err)
+      }
     }))
     setCommentData(prev => ({ ...prev, ...results }))
   }, [tripId])
@@ -195,6 +212,18 @@ export default function TripDetailPage() {
   // No editing from the cached copy — every write would 503 against a network
   // that is not there.
   const canEdit = !isOffline && (isOwner || trip?.role === 'editor')
+
+  /** Save or remove this trip from the offline cache. */
+  const toggleOfflineSave = async () => {
+    if (!trip) return
+    if (savedOffline?.saved) {
+      await removeTripOffline(tripId)
+      setSavedOffline({ saved: false, savedAt: null })
+    } else {
+      const savedAt = await saveTripOffline(tripId, trip)
+      setSavedOffline({ saved: Boolean(savedAt), savedAt: savedAt ?? null })
+    }
+  }
   const symbol = CURRENCY_SYMBOLS[trip?.currency || 'INR'] || '₹'
   const days = trip?.trip_days ?? []
   const day: TripDay | undefined = days[selectedDay]
@@ -278,23 +307,43 @@ export default function TripDetailPage() {
     if (!currentUserId) return
     const current = voteData[stopId]?.myVote ?? 0
     const next = current === vote ? 0 : vote
-    // Optimistic update
-    setVoteData(prev => ({
-      ...prev,
-      [stopId]: {
-        up: prev[stopId]?.up ?? 0,
-        down: prev[stopId]?.down ?? 0,
-        myVote: next,
-      }
-    }))
+
+    // Apply vote change to up/down counts optimistically, then reconcile with
+    // the server after the request completes.
+    setVoteData(prev => {
+      const prevUp = prev[stopId]?.up ?? 0
+      const prevDown = prev[stopId]?.down ?? 0
+      let up = prevUp, down = prevDown
+
+      // Remove the previous vote from its pile
+      if (current === 1) up -= 1
+      else if (current === -1) down -= 1
+
+      // Add the new vote to its pile (or nothing if toggling off)
+      if (next === 1) up += 1
+      else if (next === -1) down += 1
+
+      return { ...prev, [stopId]: { up, down, myVote: next } }
+    })
+
     try {
-      await fetch(`/api/trips/${tripId}/stops/votes`, {
+      const res = await fetch(`/api/trips/${tripId}/stops/votes`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ stop_id: stopId, vote: next }),
       })
-    } catch {
-      // Revert on failure — reload from server
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      // Adopt the server's authoritative counts — our optimistic math may diverge
+      // across concurrent votes from other users.
+      if (data.upvotes !== undefined && data.downvotes !== undefined) {
+        setVoteData(prev => ({
+          ...prev,
+          [stopId]: { up: data.upvotes, down: data.downvotes, myVote: next },
+        }))
+      }
+    } catch (err) {
+      console.error('[votes] cast failed:', err)
       loadVoteData(day?.stops ?? [])
     }
   }
@@ -395,6 +444,22 @@ export default function TripDetailPage() {
         </div>
       )}
 
+      {isOffline && (
+        <div className="flex items-start justify-between gap-4 rounded-lg bg-amber-50 border border-amber-200 p-4">
+          <div>
+            <p className="text-sm font-medium text-amber-800">Offline — showing your saved copy</p>
+            {savedOffline?.savedAt && (
+              <p className="text-xs text-amber-600">
+                Saved {new Date(savedOffline.savedAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+          <button onClick={() => router.push('/dashboard')} aria-label="Go to dashboard">
+            <X className="w-4 h-4 text-amber-500" />
+          </button>
+        </div>
+      )}
+
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -443,6 +508,26 @@ export default function TripDetailPage() {
                 isOwner={isOwner}
                 onMembersUpdate={loadTrip}
               />
+              <Button
+                variant={savedOffline?.saved ? 'secondary' : 'outline'}
+                size="sm"
+                className="gap-2"
+                onClick={toggleOfflineSave}
+                title={
+                  savedOffline?.saved
+                    ? 'Remove offline copy'
+                    : 'Save this trip for offline access'
+                }
+              >
+                {savedOffline?.saved ? (
+                  <Cloud className="w-4 h-4" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                <span className="hidden sm:inline">
+                  {savedOffline?.saved ? 'Saved offline' : 'Save offline'}
+                </span>
+              </Button>
             </div>
           </div>
         </div>

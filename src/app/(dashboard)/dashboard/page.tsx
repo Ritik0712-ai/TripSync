@@ -4,14 +4,15 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth/client'
+import { checkTripSaved } from '@/lib/offline'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { 
-  Plus, MapPin, Calendar, DollarSign, Users, 
+import {
+  Plus, MapPin, Calendar, DollarSign, Users,
   Plane, Mountain, Palmtree, Utensils, Camera,
-  Trash2, Clock
+  Trash2, Clock, Cloud
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -58,6 +59,8 @@ export default function DashboardPage() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [userName, setUserName] = useState('')
+  // Set of trip IDs that are saved offline.
+  const [offlineTripIds, setOfflineTripIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const fetchTrips = async () => {
@@ -76,6 +79,15 @@ export default function DashboardPage() {
 
           if (data.trips) {
             setTrips(data.trips)
+            // Lightweight check: which of these trips are saved offline?
+            const offline = new Set<string>()
+            await Promise.all(
+              data.trips.map(async (trip: { id: string }) => {
+                const { saved } = await checkTripSaved(trip.id)
+                if (saved) offline.add(trip.id)
+              })
+            )
+            setOfflineTripIds(offline)
           }
         }
       } catch (error) {
@@ -241,7 +253,15 @@ export default function DashboardPage() {
                   <div className="absolute inset-0 flex items-center justify-center">
                     <MapPin className="w-12 h-12 text-white/50" />
                   </div>
-                  <Badge 
+                  {offlineTripIds.has(trip.id) && (
+                    <div className="absolute top-3 left-3">
+                      <Badge className="bg-white/80 text-blue-700 hover:bg-white/90 gap-1">
+                        <Cloud className="w-3 h-3" />
+                        Offline
+                      </Badge>
+                    </div>
+                  )}
+                  <Badge
                     className={`absolute top-3 right-3 ${STATUS_COLORS[trip.status] || STATUS_COLORS.planning}`}
                   >
                     {trip.status}
