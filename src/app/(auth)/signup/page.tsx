@@ -64,7 +64,7 @@ export default function SignupPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-900">TripSync</h1>
-          <p className="text-gray-600 mt-2">The World's Smartest Free Trip Planner</p>
+          <p className="text-gray-600 mt-2">The World&apos;s Smartest Free Trip Planner</p>
         </div>
 
         {success ? (
@@ -72,7 +72,7 @@ export default function SignupPage() {
             <CardHeader className="space-y-1">
               <CardTitle className="text-2xl text-center">Check your email!</CardTitle>
               <CardDescription className="text-center">
-                We've sent a confirmation link to <strong>{email}</strong>.
+                We&apos;ve sent a confirmation link to <strong>{email}</strong>.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
@@ -128,7 +128,7 @@ export default function SignupPage() {
             </CardContent>
           </Card>
         )}
-        <p className="text-center text-xs text-gray-500 mt-6">By creating an account, you agree to TripSync's Terms.</p>
+        <p className="text-center text-xs text-gray-500 mt-6">By creating an account, you agree to TripSync&apos;s Terms.</p>
       </div>
     </div>
   )

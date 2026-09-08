@@ -86,7 +86,7 @@ function LoginContent() {
           </Button>
         </form>
         <div className="text-center text-sm">
-          <span className="text-gray-600">Don't have an account? </span>
+          <span className="text-gray-600">Don&apos;t have an account? </span>
           <Link href="/signup" className="text-blue-600 hover:underline font-medium">Sign up</Link>
         </div>
       </CardContent>
@@ -122,12 +122,12 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-900">TripSync</h1>
-          <p className="text-gray-600 mt-2">The World's Smartest Free Trip Planner</p>
+          <p className="text-gray-600 mt-2">The World&apos;s Smartest Free Trip Planner</p>
         </div>
         <Suspense fallback={<LoginSkeleton />}>
           <LoginContent />
         </Suspense>
-        <p className="text-center text-xs text-gray-500 mt-6">By continuing, you agree to TripSync's Terms.</p>
+        <p className="text-center text-xs text-gray-500 mt-6">By continuing, you agree to TripSync&apos;s Terms.</p>
       </div>
     </div>
   )

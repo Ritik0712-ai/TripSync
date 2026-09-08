@@ -72,6 +72,18 @@ interface GeneratedItinerary {
   trip_summary: string
 }
 
+/** A place result from the Photon geocoder, narrowed to the fields used here. */
+interface PhotonFeature {
+  properties: {
+    name: string
+    city?: string
+    state?: string
+    country?: string
+    countrycode?: string
+  }
+  geometry?: { coordinates?: [number, number] }
+}
+
 export default function CreateTripPage() {
   const router = useRouter()
   
@@ -92,7 +104,7 @@ export default function CreateTripPage() {
   const [currency, setCurrency] = useState('INR')
 
   // Destination suggestions
-  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [suggestions, setSuggestions] = useState<PhotonFeature[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
 
   // Calculate number of days
@@ -129,7 +141,7 @@ export default function CreateTripPage() {
     return () => clearTimeout(debounce)
   }, [destination])
 
-  const selectSuggestion = (place: any) => {
+  const selectSuggestion = (place: PhotonFeature) => {
     setDestination(place.properties.name + (place.properties.state ? ', ' + place.properties.state : ''))
     setShowSuggestions(false)
   }

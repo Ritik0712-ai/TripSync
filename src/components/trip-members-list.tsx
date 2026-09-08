@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { MoreHorizontal, Trash2, Shield, Pencil, Eye } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -13,13 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import type { Trip, Profile } from '@/types/database'
 
 interface TripMemberWithProfile {
@@ -43,22 +36,47 @@ export function TripMembersList({ trip, currentUserId, onMembersChange }: TripMe
   
   const isOwner = trip.owner_id === currentUserId
 
-  const fetchMembers = async () => {
+  const fetchMembers = useCallback(async () => {
     try {
       const response = await fetch(`/api/trips/${trip.id}/members`)
       const data = await response.json()
-      
+
       if (!response.ok) throw new Error(data.error)
       setMembers(data.members || [])
+      setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load members')
     } finally {
       setLoading(false)
     }
-  }
+  }, [trip.id])
 
   useEffect(() => {
-    fetchMembers()
+    // Guarded against a late response from a previous trip.id overwriting the
+    // current one, and kept off the synchronous effect path.
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/trips/${trip.id}/members`)
+        const data = await response.json()
+        if (cancelled) return
+
+        if (!response.ok) throw new Error(data.error)
+        setMembers(data.members || [])
+        setError(null)
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load members')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [trip.id])
 
   const handleRemoveMember = async (userId: string) => {

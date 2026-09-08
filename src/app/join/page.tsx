@@ -30,12 +30,16 @@ function JoinContent() {
   const token = searchParams.get('token')
   
   const [trip, setTrip] = useState<TripPreview | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Seeded from the token so the "no token" case is a first-render fact rather
+  // than something an effect corrects a render later.
+  const [loading, setLoading] = useState(() => Boolean(token))
   const [joining, setJoining] = useState(false)
   const [joined, setJoined] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() =>
+    token ? null : 'No share token provided'
+  )
   const [alreadyMember, setAlreadyMember] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<{ id: string; name?: string | null; email?: string | null } | null>(null)
 
   useEffect(() => {
     const checkUser = async () => {
@@ -46,11 +50,7 @@ function JoinContent() {
   }, [])
 
   useEffect(() => {
-    if (!token) {
-      setError('No share token provided')
-      setLoading(false)
-      return
-    }
+    if (!token) return
 
     const fetchTripPreview = async () => {
       try {
@@ -197,7 +197,7 @@ function JoinContent() {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Join Trip</CardTitle>
           <CardDescription>
-            You've been invited to collaborate on this trip
+            You&apos;ve been invited to collaborate on this trip
           </CardDescription>
         </CardHeader>
         

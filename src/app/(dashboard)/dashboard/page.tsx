@@ -13,6 +13,7 @@ import {
   Plane, Mountain, Palmtree, Utensils, Camera,
   Trash2, Clock
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 interface Trip {
   id: string
@@ -26,7 +27,7 @@ interface Trip {
   interests: string[]
   status: string
   created_at: string
-  trip_days: any[]
+  trip_days: { stops?: unknown[] }[]
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -35,14 +36,14 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-gray-100 text-gray-700',
 }
 
-const TRAVEL_STYLE_ICONS: Record<string, any> = {
+const TRAVEL_STYLE_ICONS: Record<string, LucideIcon> = {
   solo: Users,
   couple: Users,
   friends: Users,
   family: Users,
 };
 
-const INTEREST_ICONS: Record<string, any> = {
+const INTEREST_ICONS: Record<string, LucideIcon> = {
   beaches: Palmtree,
   culture: Building,
   food: Utensils,
@@ -131,7 +132,7 @@ export default function DashboardPage() {
   }
 
   const getTotalStops = (trip: Trip) => {
-    return trip.trip_days?.reduce((sum, day: any) => sum + (day.stops?.length || 0), 0) || 0
+    return trip.trip_days?.reduce((sum, day) => sum + (day.stops?.length || 0), 0) || 0
   }
 
   if (isLoading) {

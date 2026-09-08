@@ -128,7 +128,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto text-center">
           <Badge className="mb-6 bg-blue-100 text-blue-700 hover:bg-blue-100">
             <Sparkles className="w-3 h-3 mr-1" />
-            World's Smartest Free Trip Planner
+            World&apos;s Smartest Free Trip Planner
           </Badge>
           
           <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
@@ -216,7 +216,7 @@ export default function HomePage() {
               Everything you need for your trip
             </h2>
             <p className="text-xl text-gray-600">
-              From planning to navigating — TripSync is your trip's operating system
+              From planning to navigating — TripSync is your trip&apos;s operating system
             </p>
           </div>
           
@@ -293,7 +293,7 @@ export default function HomePage() {
                       <Star key={star} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                     ))}
                   </div>
-                  <p className="text-gray-700 mb-4">"{testimonial.text}"</p>
+                  <p className="text-gray-700 mb-4">&ldquo;{testimonial.text}&rdquo;</p>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                       <span className="font-semibold text-blue-600">{testimonial.avatar}</span>
@@ -319,7 +319,7 @@ export default function HomePage() {
           <p className="text-xl text-blue-100 mb-8">
             Join thousands of travelers planning smarter trips with TripSync.
             <br />
-            It's completely free for solo travelers.
+            It&apos;s completely free for solo travelers.
           </p>
           <Link href="/signup">
             <Button size="lg" variant="secondary" className="text-lg px-8 h-14 gap-2">
