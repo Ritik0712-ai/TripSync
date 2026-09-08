@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fetchWeather, type DayWeather } from '@/lib/weather'
 import type { Trip } from '@/types/database'
 
@@ -28,30 +28,47 @@ function WeatherBadge({ w, date }: { w: DayWeather; date: string }) {
 }
 
 export function TripWeather({ trip }: TripWeatherProps) {
-  const [weather, setWeather] = useState<Map<string, DayWeather>>(new Map())
-  const [loading, setLoading] = useState(false)
+  // `null` means "not fetched yet", which is what `loading` used to track.
+  // Deriving it removes a second state variable that had to be kept in sync
+  // and, with it, the synchronous setState that React flags in effects.
+  const [weather, setWeather] = useState<Map<string, DayWeather> | null>(null)
+
+  const dates = useMemo(
+    () =>
+      (trip.trip_days ?? [])
+        .map((d) => d.date)
+        .filter((d): d is string => !!d),
+    [trip.trip_days]
+  )
+
+  const lat = trip.destination_lat
+  const lng = trip.destination_lng
 
   useEffect(() => {
-    if (!trip.destination_lat || !trip.destination_lng) return
-    if (!trip.trip_days?.length) return
+    if (!lat || !lng || !dates.length) return
 
-    const dates = trip.trip_days
-      .map((d) => d.date)
-      .filter((d): d is string => !!d)
+    let cancelled = false
 
-    if (!dates.length) return
+    fetchWeather(lat, lng, dates)
+      .then((w) => {
+        if (!cancelled) setWeather(w)
+      })
+      .catch(() => {
+        // An empty map means "we tried and got nothing" — the section hides
+        // itself rather than spinning forever.
+        if (!cancelled) setWeather(new Map())
+      })
 
-    setLoading(true)
-    fetchWeather(trip.destination_lat, trip.destination_lng, dates).then((w) => {
-      setWeather(w)
-      setLoading(false)
-    })
-  }, [trip.destination_lat, trip.destination_lng, trip.trip_days])
+    return () => {
+      cancelled = true
+    }
+  }, [lat, lng, dates])
 
-  if (!trip.destination_lat || !trip.destination_lng) return null
+  if (!lat || !lng) return null
   if (!trip.trip_days?.length) return null
 
-  const daysWithWeather = trip.trip_days.filter((d) => d.date && weather.has(d.date!))
+  const loading = weather === null && dates.length > 0
+  const daysWithWeather = trip.trip_days.filter((d) => d.date && weather?.has(d.date))
 
   if (loading) {
     return (
@@ -68,7 +85,7 @@ export function TripWeather({ trip }: TripWeatherProps) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
       {daysWithWeather.map((d) => {
-        const w = weather.get(d.date!)
+        const w = weather?.get(d.date!)
         if (!w) return null
         return <WeatherBadge key={d.id} w={w} date={d.date!} />
       })}
