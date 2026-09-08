@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -21,6 +22,16 @@ import { TripMembersList } from '@/components/trip-members-list'
 import { StopFormDialog } from '@/components/stop-form-dialog'
 import { TripSettingsDialog } from '@/components/trip-settings-dialog'
 import { mapsUrlForStop, mapsUrlForDay } from '@/lib/maps'
+
+const TripMap = dynamic(() => import('@/components/trip-map').then((m) => m.TripMap), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-slate-100 animate-pulse rounded-lg" />,
+})
+
+const TripMapPlaceholder = dynamic(
+  () => import('@/components/trip-map').then((m) => m.TripMapPlaceholder),
+  { ssr: false }
+)
 import type { Stop, Trip, TripDay } from '@/types/database'
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -46,6 +57,8 @@ export default function TripDetailPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDay, setSelectedDay] = useState(0)
+  // Mobile: which panel is visible (itinerary or map). Desktop always shows both.
+  const [mobileTab, setMobileTab] = useState<'itinerary' | 'map'>('itinerary')
 
   const [editMode, setEditMode] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -358,9 +371,33 @@ export default function TripDetailPage() {
         )}
       </div>
 
-      {day && (
-        <Card>
-          <CardHeader>
+      {/* Mobile: itinerary / map tab bar */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg lg:hidden">
+        <button
+          onClick={() => setMobileTab('itinerary')}
+          className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
+            mobileTab === 'itinerary' ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+          }`}
+        >
+          Itinerary
+        </button>
+        <button
+          onClick={() => setMobileTab('map')}
+          className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
+            mobileTab === 'map' ? 'bg-white shadow text-gray-900' : 'text-gray-500'
+          }`}
+        >
+          Map
+        </button>
+      </div>
+
+      {/* Desktop split: itinerary left, map right */}
+      <div className="hidden lg:grid lg:grid-cols-2 gap-6 items-start">
+        {/* Itinerary column */}
+        <div>
+          {day && (
+            <Card>
+              <CardHeader>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 {editMode && titleDraft !== null ? (
@@ -558,7 +595,120 @@ export default function TripDetailPage() {
             </div>
           </CardContent>
         </Card>
+          )}
+        </div>
+
+        {/* Map column — sticky on desktop so it stays in view while scrolling itinerary */}
+        <div className="sticky top-6 h-[calc(100vh-8rem)]">
+          {day ? (
+            <TripMap
+              stops={day.stops ?? []}
+              onStopClick={undefined}
+              dayIndex={selectedDay}
+            />
+          ) : (
+            <TripMapPlaceholder totalStops={0} geocodedStops={0} />
+          )}
+        </div>
+      </div>
+
+    {/* Mobile: show itinerary OR map, not both */}
+    <div className="lg:hidden">
+      {mobileTab === 'itinerary' && day && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <CardTitle className="text-xl">
+                  {day.day_title || `Day ${day.day_number}`}
+                </CardTitle>
+                <CardDescription>{formatDate(day.date)}</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {!day.stops?.length ? (
+                <p className="text-gray-500 text-center py-8">
+                  {editMode ? 'No stops yet — add the first one.' : 'No stops planned for this day'}
+                </p>
+              ) : (
+                day.stops.map((stop, index) => {
+                  const config = CATEGORY_CONFIG[stop.category ?? ''] ?? CATEGORY_CONFIG.attraction
+                  const CategoryIcon = config.icon
+
+                  return (
+                    <div key={stop.id} className="relative">
+                      {index < day.stops.length - 1 && (
+                        <div className="absolute left-5 top-14 bottom-0 w-0.5 bg-gray-200" />
+                      )}
+                      <div className="flex gap-3">
+                        <div className={`mt-1 w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${config.color}`}>
+                          <CategoryIcon className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium text-gray-900">{stop.place_name}</p>
+                            {editMode && (
+                              <div className="flex gap-1 shrink-0">
+                                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setEditingStop(stop); setStopDialogOpen(true) }}>
+                                  <Pencil className="w-3 h-3" />
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-red-600" disabled={busy} onClick={() => deleteStop(stop)}>
+                                  <Trash2 className="w-3 h-3" /> Remove
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                          {stop.address && <p className="text-sm text-gray-500">{stop.address}</p>}
+                          {stop.notes && <p className="text-sm text-gray-600 mt-1">{stop.notes}</p>}
+                          <div className="flex flex-wrap items-center gap-3 mt-2 text-sm">
+                            {stop.start_time && (
+                              <span className="flex items-center gap-1 text-gray-600">
+                                <Clock className="w-4 h-4" />
+                                {String(stop.start_time).slice(0, 5)}
+                              </span>
+                            )}
+                            <span className="text-gray-600">{stop.duration_minutes} min</span>
+                            {stop.estimated_cost ? (
+                              <span className="text-gray-600">{symbol}{stop.estimated_cost.toLocaleString()}</span>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <a
+                              href={mapsUrlForStop(stop)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline"
+                            >
+                              Open in Maps
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
+
+      {mobileTab === 'map' && (
+        <div className="h-[60vh] rounded-lg overflow-hidden border">
+          {day ? (
+            <TripMap
+              stops={day.stops ?? []}
+              onStopClick={undefined}
+              dayIndex={selectedDay}
+            />
+          ) : (
+            <TripMapPlaceholder totalStops={0} geocodedStops={0} />
+          )}
+        </div>
+      )}
+    </div>
 
       {currentUserId && (
         <TripMembersList
