@@ -8,7 +8,7 @@ import {
   ArrowLeft, MapPin, Calendar, Users, Clock, Edit, Utensils,
   Camera, ShoppingBag, Building, Car, Mountain, ExternalLink,
   Plus, Trash2, ChevronUp, ChevronDown, Pencil, Check, X, Loader2,
-  MessageSquare, ThumbsUp, ThumbsDown, Download, WifiOff, Cloud,
+  MessageSquare, ThumbsUp, ThumbsDown, FileDown, WifiOff, Cloud,
 } from 'lucide-react'
 
 import { authClient } from '@/lib/auth/client'
@@ -26,6 +26,7 @@ import { TripSettingsDialog } from '@/components/trip-settings-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { mapsUrlForStop, mapsUrlForDay } from '@/lib/maps'
 import { saveTripOffline, getCachedTrip, checkTripSaved, removeTripOffline } from '@/lib/offline'
+import { exportTripToPDF } from '@/lib/pdf'
 
 const TripMap = dynamic(() => import('@/components/trip-map').then((m) => m.TripMap), {
   ssr: false,
@@ -77,6 +78,8 @@ export default function TripDetailPage() {
   const [isOffline, setIsOffline] = useState(false)
   // Whether this trip has been saved for offline access. null = not checked yet.
   const [savedOffline, setSavedOffline] = useState<{ saved: boolean; savedAt: string | null } | null>(null)
+  // PDF export in progress.
+  const [exportingPDF, setExportingPDF] = useState(false)
   const [selectedDay, setSelectedDay] = useState(0)
   // Mobile: which panel is visible (itinerary or map). Desktop always shows both.
   const [mobileTab, setMobileTab] = useState<'itinerary' | 'map'>('itinerary')
@@ -213,15 +216,18 @@ export default function TripDetailPage() {
   // that is not there.
   const canEdit = !isOffline && (isOwner || trip?.role === 'editor')
 
-  /** Save or remove this trip from the offline cache. */
-  const toggleOfflineSave = async () => {
+  /** Generate and download the trip itinerary as a PDF. */
+  const exportPDF = async () => {
     if (!trip) return
-    if (savedOffline?.saved) {
-      await removeTripOffline(tripId)
-      setSavedOffline({ saved: false, savedAt: null })
-    } else {
-      const savedAt = await saveTripOffline(tripId, trip)
-      setSavedOffline({ saved: Boolean(savedAt), savedAt: savedAt ?? null })
+    setExportingPDF(true)
+    try {
+      const shareUrl = `${window.location.origin}/trip/${tripId}`
+      await exportTripToPDF(trip, shareUrl)
+    } catch (err) {
+      console.error('[pdf] export failed:', err)
+      alert('PDF export failed. Please try again.')
+    } finally {
+      setExportingPDF(false)
     }
   }
   const symbol = CURRENCY_SYMBOLS[trip?.currency || 'INR'] || '₹'
@@ -460,6 +466,21 @@ export default function TripDetailPage() {
         </div>
       )}
 
+      {!isOffline && (
+        <button
+          onClick={exportPDF}
+          disabled={exportingPDF || !trip}
+          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50 transition-colors"
+        >
+          {exportingPDF ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <FileDown className="w-4 h-4" />
+          )}
+          {exportingPDF ? 'Generating PDF…' : 'Download PDF'}
+        </button>
+      )}
+
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -509,23 +530,20 @@ export default function TripDetailPage() {
                 onMembersUpdate={loadTrip}
               />
               <Button
-                variant={savedOffline?.saved ? 'secondary' : 'outline'}
+                variant="outline"
                 size="sm"
                 className="gap-2"
-                onClick={toggleOfflineSave}
-                title={
-                  savedOffline?.saved
-                    ? 'Remove offline copy'
-                    : 'Save this trip for offline access'
-                }
+                onClick={exportPDF}
+                disabled={exportingPDF}
+                title="Download this trip as a PDF"
               >
-                {savedOffline?.saved ? (
-                  <Cloud className="w-4 h-4" />
+                {exportingPDF ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Download className="w-4 h-4" />
+                  <FileDown className="w-4 h-4" />
                 )}
                 <span className="hidden sm:inline">
-                  {savedOffline?.saved ? 'Saved offline' : 'Save offline'}
+                  {exportingPDF ? 'Generating…' : 'Export PDF'}
                 </span>
               </Button>
             </div>
@@ -892,6 +910,8 @@ export default function TripDetailPage() {
               stops={day.stops ?? []}
               onStopClick={undefined}
               dayIndex={selectedDay}
+              destinationLat={trip.destination_lat}
+              destinationLng={trip.destination_lng}
             />
           ) : (
             <TripMapPlaceholder totalStops={0} geocodedStops={0} />
@@ -989,6 +1009,8 @@ export default function TripDetailPage() {
               stops={day.stops ?? []}
               onStopClick={undefined}
               dayIndex={selectedDay}
+              destinationLat={trip.destination_lat}
+              destinationLng={trip.destination_lng}
             />
           ) : (
             <TripMapPlaceholder totalStops={0} geocodedStops={0} />

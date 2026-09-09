@@ -71,10 +71,16 @@ function TripMapInner({
   stops,
   dayIndex,
   onStopClick,
+  destinationLat,
+  destinationLng,
+  onRefreshGeocodes,
 }: {
   stops: Stop[]
   dayIndex: number
   onStopClick?: (stop: Stop) => void
+  destinationLat?: number | null
+  destinationLng?: number | null
+  onRefreshGeocodes?: () => void
 }) {
   const mapRef = useRef<LeafletMap | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -149,7 +155,22 @@ function TripMapInner({
       )
     }
 
-    if (geocoded.length === 0) return
+    // If no stop has coordinates, try to show the trip destination as a fallback.
+    // This keeps the map from being blank for new trips where stops haven't been geocoded yet.
+    if (geocoded.length === 0) {
+      const dLat = destinationLat ?? null
+      const dLng = destinationLng ?? null
+      if (typeof dLat === 'number' && typeof dLng === 'number') {
+        map.setView([dLat, dLng], 10)
+        const marker = L.marker([dLat, dLng], {
+          icon: createNumberedIcon(L, 1, false, dayColor(dayIndex)),
+        })
+          .bindPopup('<b>Trip destination</b><br/><small>Stops are still being geocoded</small>')
+          .addTo(map)
+        markersRef.current.push(marker)
+      }
+      return
+    }
 
     const color = dayColor(dayIndex)
 
@@ -201,7 +222,7 @@ function TripMapInner({
       const group = L.featureGroup(markersRef.current)
       map.fitBounds(group.getBounds().pad(0.15))
     }
-  }, [stops, dayIndex, onStopClick])
+  }, [stops, dayIndex, onStopClick, destinationLat, destinationLng])
 
   return (
     <div className="relative h-full w-full rounded-lg overflow-hidden">
@@ -216,23 +237,38 @@ function TripMapInner({
 export function TripMapPlaceholder({
   totalStops,
   geocodedStops,
+  onRefreshGeocodes,
 }: {
   totalStops: number
   geocodedStops: number
+  onRefreshGeocodes?: () => void
 }) {
   const missing = totalStops - geocodedStops
   return (
-    <div className="h-full w-full flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg">
-      <div className="text-center space-y-1 px-6">
+    <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-lg p-6">
+      <div className="text-center space-y-2 mb-4">
         <p className="text-sm text-slate-500">
-          No coordinates yet for this day.
+          {totalStops === 0
+            ? 'No stops on this day.'
+            : 'No coordinates yet for this day.'}
         </p>
         {missing > 0 && (
           <p className="text-xs text-slate-400">
-            {missing} stop{missing !== 1 ? 's' : ''} still geocoding.
+            {missing} stop{missing !== 1 ? 's' : ''} still being geocoded.
           </p>
         )}
+        <p className="text-xs text-slate-400">
+          Coordinates are looked up automatically when stops are added.
+        </p>
       </div>
+      {onRefreshGeocodes && totalStops > 0 && geocodedStops === 0 && (
+        <button
+          onClick={onRefreshGeocodes}
+          className="text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Refresh coordinates
+        </button>
+      )}
     </div>
   )
 }
